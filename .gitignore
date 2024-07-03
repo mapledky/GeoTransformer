@@ -7,5 +7,6 @@ output
 **/__pycache__
 weights/*
 pretrained
+assets
 data/Kitti/downsampled
 data/ModelNet/*.pkl
