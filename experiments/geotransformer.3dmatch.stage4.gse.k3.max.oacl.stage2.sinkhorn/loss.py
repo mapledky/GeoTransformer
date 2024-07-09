@@ -5,7 +5,7 @@ from geotransformer.modules.loss import WeightedCircleLoss
 from geotransformer.modules.ops.transformation import apply_transform
 from geotransformer.modules.registration.metrics import isotropic_transform_error
 from geotransformer.modules.ops.pairwise_distance import pairwise_distance
-
+from geotransformer.modules.mask import LaplaceLoss
 
 class CoarseMatchingLoss(nn.Module):
     def __init__(self, cfg):
@@ -76,19 +76,32 @@ class OverallLoss(nn.Module):
         super(OverallLoss, self).__init__()
         self.coarse_loss = CoarseMatchingLoss(cfg)
         self.fine_loss = FineMatchingLoss(cfg)
+        self.use_laplace = cfg.laplace.loss
+        if self.use_laplace:
+            self.laplace_loss = LaplaceLoss()
         self.weight_coarse_loss = cfg.loss.weight_coarse_loss
         self.weight_fine_loss = cfg.loss.weight_fine_loss
+        self.weight_laplace_loss = cfg.loss.weight_laplace_loss
 
     def forward(self, output_dict, data_dict):
         coarse_loss = self.coarse_loss(output_dict)
         fine_loss = self.fine_loss(output_dict, data_dict)
-
-        loss = self.weight_coarse_loss * coarse_loss + self.weight_fine_loss * fine_loss
-
+        if self.use_laplace:
+            laplace_loss, corr_loss, mask_loss = self.laplace_loss(output_dict, data_dict)
+            loss = self.weight_coarse_loss * coarse_loss + self.weight_fine_loss * fine_loss + self.weight_laplace_loss * laplace_loss
+        else:
+            loss = self.weight_coarse_loss * coarse_loss + self.weight_fine_loss * fine_loss
+            return {
+            'loss': loss,
+            'c_loss': coarse_loss,
+            'f_loss': fine_loss,
+            }
         return {
             'loss': loss,
             'c_loss': coarse_loss,
             'f_loss': fine_loss,
+            'laplace_loss': laplace_loss,
+            'corr_loss': corr_loss
         }
 
 

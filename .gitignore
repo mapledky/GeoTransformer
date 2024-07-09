@@ -2,6 +2,7 @@
 .vscode
 build
 output
+output_tune
 *.egg-info
 *.so
 **/__pycache__

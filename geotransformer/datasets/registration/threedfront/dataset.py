@@ -6,6 +6,7 @@ import os
 
 import numpy as np
 import torch
+import json
 import torch.utils.data
 
 from geotransformer.utils.pointcloud import (
@@ -75,12 +76,15 @@ class ThreeDFrontPairDataset(torch.utils.data.Dataset):
     def __len__(self):
         return len(self.data_list)
 
-    def _load_point_cloud(self, file_path):
-        points = np.load(file_path)
-        if self.point_limit is not None and points.shape[0] > self.point_limit:
-            indices = np.random.permutation(points.shape[0])[: self.point_limit]
-            points = points[indices]
-        return points
+    def point_cut(self, points, indices, max_points=20000):
+        keep_indices = np.random.choice(len(points), max_points, replace=False)
+        points = points[keep_indices]
+        new_indices = []
+        for i, idx in enumerate(indices):
+            if idx in keep_indices:
+                new_idx = np.where(keep_indices == idx)[0][0]
+                new_indices.append(new_idx)
+        return points, np.array(new_indices)
 
     def _augment_point_cloud(self, ref_points, src_points, rotation, translation):
         # aug_rotation = random_sample_rotation(self.aug_rotation)
@@ -103,8 +107,17 @@ class ThreeDFrontPairDataset(torch.utils.data.Dataset):
         scene_id = self.data_list[index]
         scene_path = osp.join(self.dataset_root , scene_id)
 
-        ref_points = self._load_point_cloud(osp.join(scene_path, 'ref.npy'))
-        src_points = self._load_point_cloud(osp.join(scene_path, 'src.npy'))
+        ref_points = np.load(osp.join(scene_path, 'ref.npy'))
+        src_points = np.load(osp.join(scene_path, 'src.npy'))
+        src_back_indices_json = os.path.join(scene_path, 'src_back_indices.json')
+        with open(src_back_indices_json , 'r') as file:
+            data = json.load(file)
+            src_back_indices = np.array(data['back_indices'])
+
+        if len(src_points) > self.point_limit:
+            src_points, src_back_indices = self.point_cut(src_points,src_back_indices, self.point_limit)
+        if len(ref_points) > self.point_limit:
+            ref_points, _ = self.point_cut(ref_points,[], self.point_limit)
         transform = np.load(osp.join(scene_path, 'relative_transform.npy'))
 
         rotation = transform[:3, :3]
@@ -133,6 +146,7 @@ class ThreeDFrontPairDataset(torch.utils.data.Dataset):
 
         data_dict['ref_points'] = ref_points.astype(np.float32)
         data_dict['src_points'] = src_points.astype(np.float32)
+        data_dict['src_back_indices'] = src_back_indices
         data_dict['ref_feats'] = np.ones((ref_points.shape[0], 1), dtype=np.float32)
         data_dict['src_feats'] = np.ones((src_points.shape[0], 1), dtype=np.float32)
         data_dict['transform'] = transform.astype(np.float32)

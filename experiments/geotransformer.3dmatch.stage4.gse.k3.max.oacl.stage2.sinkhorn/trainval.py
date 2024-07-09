@@ -10,6 +10,9 @@ from dataset import train_valid_data_loader
 from model import create_model
 from loss import OverallLoss, Evaluator
 
+"""
+python -m torch.distributed.launch --nproc_per_node=2 code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/trainval.py
+"""
 
 class Trainer(EpochBasedTrainer):
     def __init__(self, cfg):

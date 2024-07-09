@@ -3,7 +3,7 @@ import os
 import numpy as np
 import random
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+os.environ["CUDA_VISIBLE_DEVICES"] = '3'
 import torch
 
 from scipy.spatial import cKDTree
@@ -14,7 +14,7 @@ from geotransformer.utils.open3d import make_open3d_point_cloud, get_color, draw
 from geotransformer.utils.registration import compute_registration_error
 from geotransformer.modules.registration import weighted_procrustes
 from geotransformer.utils.open3d import registration_with_ransac_from_correspondences
-from config import make_cfg
+from config_front import make_cfg
 from model import create_model
 from tqdm import tqdm
 import open3d as o3d
@@ -22,9 +22,9 @@ import json
 import shutil
 
 """"
-python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir pro25/high --weights code/GeoTransformer-main/assets/geotransformer-3dmatch.pth.tar
+python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir wi/low --weights code/GeoTransformer-main/assets/geotransformer-3dmatch.pth.tar
 
-python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir wo/low --weights code/GeoTransformer-main/output/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/snapshot.pth.tar --tune 1
+python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir sp/low --weights code/GeoTransformer-main/assets/laplace/per_corr/epoch-49.pth.tar --tune 1
 
 python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir pro40/low --way ransac --tune 1
 
@@ -42,13 +42,15 @@ def make_parser():
     return parser
 
 
-def load_data(src_file, ref_file, gt_file):
+def load_data(src_file, ref_file, gt_file, src_back_indices=[]):
     src_points = np.load(src_file)  # n,3
+    if len(src_back_indices) == 0:
+        src_back_indices = np.arange(0, len(src_points))
     if len(src_points) > 20000:
-        src_points = point_cut(src_points)
+        src_points, src_back_indices = point_cut(src_points, src_back_indices)
     ref_points = np.load(ref_file)
     if len(ref_points) > 20000:
-        ref_points = point_cut(ref_points)
+        ref_points, _ = point_cut(ref_points, [])
 
     src_feats = np.ones_like(src_points[:, :1])
     ref_feats = np.ones_like(ref_points[:, :1])
@@ -58,6 +60,7 @@ def load_data(src_file, ref_file, gt_file):
         "src_points": src_points.astype(np.float32),
         "ref_feats": ref_feats.astype(np.float32),
         "src_feats": src_feats.astype(np.float32),
+        "src_back_indices": src_back_indices
     }
 
     if gt_file is not None:
@@ -66,11 +69,16 @@ def load_data(src_file, ref_file, gt_file):
 
     return data_dict
 
-def point_cut(points, point_limit=18000):
-    if point_limit is not None and points.shape[0] > point_limit:
-        indices = np.random.permutation(points.shape[0])[: point_limit]
-        points = points[indices]
-    return points
+def point_cut(points, indices, max_points=20000):
+    keep_indices = np.random.choice(len(points), max_points, replace=False)
+    points = points[keep_indices]
+    new_indices = []
+    for i, idx in enumerate(indices):
+        if idx in keep_indices:
+            new_idx = np.where(keep_indices == idx)[0][0]
+            new_indices.append(new_idx)
+    return points, np.array(new_indices)
+
 
 def process_pair(model, data_dict, cfg):
     neighbor_limits = [38, 36, 36, 38]  # default setting in 3DMatch
@@ -295,8 +303,17 @@ def batch_test(data_dir,output_succ, output_fail, weights, corr_record=False, tu
 
     # prepare model
     model = create_model(cfg).cuda()
-    state_dict = torch.load(weights)
-    model.load_state_dict(state_dict["model"])
+    state_dict = torch.load(weights)['model']
+    # Initialize missing keys with random values
+    model_keys = set(model.state_dict().keys())
+    missing_keys = model_keys - set(state_dict.keys())
+    for key in missing_keys:
+        if 'weight' in key:
+            state_dict[key] = torch.randn_like(model.state_dict()[key])
+        elif 'bias' in key:
+            state_dict[key] = torch.zeros_like(model.state_dict()[key])
+    
+    model.load_state_dict(state_dict, strict=False)
     model.eval()
 
     rre_true = []
@@ -350,11 +367,8 @@ def batch_test(data_dir,output_succ, output_fail, weights, corr_record=False, tu
             ref_back_indices_json = os.path.join(subdir_path, 'ref_back_indices.json')
             with open(src_back_indices_json , 'r') as file:
                 data = json.load(file)
-                src_back_indices = data['back_indices']
-            with open(ref_back_indices_json , 'r') as file:
-                data = json.load(file)
-                ref_back_indices = data['back_indices']
-                
+                src_back_indices = np.array(data['back_indices'])
+
             data_dict_true = None
             data_dict_wo_anim = None
 
@@ -363,7 +377,7 @@ def batch_test(data_dir,output_succ, output_fail, weights, corr_record=False, tu
             corr_points = None
 
             if os.path.exists(src_true_file) and os.path.exists(ref_true_file) and os.path.exists(gt_file):
-                data_dict_true = load_data(src_true_file, ref_true_file, gt_file)
+                data_dict_true = load_data(src_true_file, ref_true_file, gt_file, src_back_indices)
                 #if len(data_dict_true.get('src_points'))< 15000 and len(data_dict_true.get('ref_points')) < 15000:
                 print(len(data_dict_true.get('src_points')) , len(data_dict_true.get('ref_points')))
                 rre, rte, estimate_rt,  corr = process_pair(model, data_dict_true, cfg)
@@ -391,11 +405,11 @@ def batch_test(data_dir,output_succ, output_fail, weights, corr_record=False, tu
                     rre_true.append(rre)
                     rte_true.append(rte)
                 
-                savePC(data_dict_true.get('src_points'), src_pcd)
-                savePC(data_dict_true.get('ref_points'), ref_pcd, False)
+                # savePC(data_dict_true.get('src_points'), src_pcd)
+                # savePC(data_dict_true.get('ref_points'), ref_pcd, False)
 
-                savePC(data_dict_true.get('src_points')[src_back_indices], src_back_pcd)
-                savePC(data_dict_true.get('ref_points')[ref_back_indices], ref_back_pcd, False)
+                # savePC(data_dict_true.get('src_points')[src_back_indices], src_back_pcd)
+                # savePC(data_dict_true.get('ref_points')[ref_back_indices], ref_back_pcd, False)
                 #combinePC(src_true_file, ref_true_file, np.load(gt_file).astype(np.float32), output_gt)
                 #combinePC(src_true_file, ref_true_file, estimate_rt, output_es)
                     
@@ -504,7 +518,7 @@ def batch_test(data_dir,output_succ, output_fail, weights, corr_record=False, tu
 def main():
     parser = make_parser()
     args = parser.parse_args()
-    dataset = os.path.join('dataset/3D-Deforming-FRONT-v4/test', args.data_dir)
+    dataset = os.path.join('dataset/3D-Deforming-FRONT-v4s/rawdata', args.data_dir)
     corr_out_succ = os.path.join('dataset/3D-Deforming-FRONT-v4/output/succ', args.data_dir)
     corr_out_fail = os.path.join('dataset/3D-Deforming-FRONT-v4/output/fail', args.data_dir)
     if args.way == 'lgr':

@@ -16,7 +16,7 @@ _C.seed = 7351
 _C.working_dir = osp.dirname(osp.realpath(__file__))
 _C.root_dir = osp.dirname(osp.dirname(_C.working_dir))
 _C.exp_name = osp.basename(_C.working_dir)
-_C.output_dir = osp.join(_C.root_dir, 'output', _C.exp_name)
+_C.output_dir = osp.join(_C.root_dir, 'output_stage1', _C.exp_name)
 _C.snapshot_dir = osp.join(_C.output_dir, 'snapshots')
 _C.log_dir = osp.join(_C.output_dir, 'logs')
 _C.event_dir = osp.join(_C.output_dir, 'events')
@@ -35,8 +35,8 @@ _C.data = edict()
 _C.data.dataset_root = 'dataset/3D-Deforming-FRONT-v3/rawdata/'
 
 #resume
-_C.snapshot = osp.join(_C.output_dir, 'snapshots/snapshot.pth.tar')
-
+#_C.snapshot = osp.join(_C.output_dir, 'snapshots/snapshot.pth.tar')
+_C.snapshot = 'code/GeoTransformer-main/assets/geotransformer-3dmatch.pth.tar'
 # train data
 _C.train = edict()
 _C.train.batch_size = 1
@@ -50,7 +50,7 @@ _C.train.augmentation_rotation = 1.0
 _C.test = edict()
 _C.test.batch_size = 1
 _C.test.num_workers = 8
-_C.test.point_limit = None
+_C.test.point_limit = 30000
 
 # evaluation
 _C.eval = edict()
@@ -73,7 +73,7 @@ _C.optim.lr = 1e-5
 _C.optim.lr_decay = 0.95
 _C.optim.lr_decay_steps = 1
 _C.optim.weight_decay = 1e-6
-_C.optim.max_epoch =100
+_C.optim.max_epoch =60
 _C.optim.grad_acc_steps = 1
 
 # model - backbone
@@ -144,7 +144,12 @@ _C.fine_loss.positive_radius = 0.05
 _C.loss = edict()
 _C.loss.weight_coarse_loss = 1.0
 _C.loss.weight_fine_loss = 1.0
+_C.loss.weight_laplace_loss = 1.0
 
+# laplace
+_C.laplace = edict()
+_C.laplace.mask = False
+_C.laplace.loss = False
 
 def make_cfg():
     return _C

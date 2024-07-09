@@ -12,7 +12,8 @@ from geotransformer.modules.geotransformer import (
     SuperPointTargetGenerator,
     LocalGlobalRegistration,
 )
-
+from geotransformer.modules.mask import LaplaceMask
+from geotransformer.modules.mask import LaplaceLoss
 from backbone import KPConvFPN
 
 
@@ -32,6 +33,10 @@ class GeoTransformer(nn.Module):
             cfg.backbone.group_norm,
         )
 
+        self.mask_match = cfg.laplace.mask
+        if self.mask_match:
+            self.mask = LaplaceMask(cfg.geotransformer.input_dim)
+        #self.loss = LaplaceLoss()
         self.transformer = GeometricTransformer(
             cfg.geotransformer.input_dim,
             cfg.geotransformer.output_dim,
@@ -132,6 +137,9 @@ class GeoTransformer(nn.Module):
         # 3. Conditional Transformer
         ref_feats_c = feats_c[:ref_length_c]
         src_feats_c = feats_c[ref_length_c:]
+        if self.mask_match:
+            mask = self.mask(src_feats_c.unsqueeze(0), ref_feats_c.unsqueeze(0))
+            output_dict['corr_sp_mask'] = mask
         ref_feats_c, src_feats_c = self.transformer(
             ref_points_c.unsqueeze(0),
             src_points_c.unsqueeze(0),
@@ -152,9 +160,14 @@ class GeoTransformer(nn.Module):
 
         # 6. Select topk nearest node correspondences
         with torch.no_grad():
-            ref_node_corr_indices, src_node_corr_indices, node_corr_scores = self.coarse_matching(
-                ref_feats_c_norm, src_feats_c_norm, ref_node_masks, src_node_masks
-            )
+            if self.mask_match:
+                ref_node_corr_indices, src_node_corr_indices, node_corr_scores = self.coarse_matching(
+                    ref_feats_c_norm, src_feats_c_norm, ref_node_masks, src_node_masks, mask
+                )
+            else:
+                ref_node_corr_indices, src_node_corr_indices, node_corr_scores = self.coarse_matching(
+                    ref_feats_c_norm, src_feats_c_norm, ref_node_masks, src_node_masks
+                )
 
             output_dict['ref_node_corr_indices'] = ref_node_corr_indices
             output_dict['src_node_corr_indices'] = src_node_corr_indices
@@ -209,6 +222,7 @@ class GeoTransformer(nn.Module):
             output_dict['corr_scores'] = corr_scores
             output_dict['estimated_transform'] = estimated_transform
 
+        #loss = self.loss(output_dict, data_dict)
         return output_dict
 
 

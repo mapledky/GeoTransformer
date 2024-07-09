@@ -144,6 +144,16 @@ class BaseTrainer(abc.ABC):
         model_dict = state_dict['model']
         if fix_prefix and self.distributed:
             model_dict = OrderedDict([('module.' + key, value) for key, value in model_dict.items()])
+        
+        # Initialize missing keys with random values
+        model_keys = set(self.model.state_dict().keys())
+        missing_keys = model_keys - set(model_dict.keys())
+        for key in missing_keys:
+            if 'weight' in key:
+                model_dict[key] = torch.randn_like(self.model.state_dict()[key])
+            elif 'bias' in key:
+                model_dict[key] = torch.zeros_like(self.model.state_dict()[key])
+
         self.model.load_state_dict(model_dict, strict=False)
 
         # log missing keys and unexpected keys

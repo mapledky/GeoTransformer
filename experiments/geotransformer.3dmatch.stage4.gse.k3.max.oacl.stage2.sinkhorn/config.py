@@ -32,7 +32,7 @@ ensure_dir(_C.registration_dir)
 
 # data
 _C.data = edict()
-_C.data.dataset_root = osp.join(_C.root_dir, 'data', '3DMatch')
+_C.data.dataset_root = 'dataset/3dmatch'
 
 # train data
 _C.train = edict()
@@ -141,7 +141,13 @@ _C.fine_loss.positive_radius = 0.05
 _C.loss = edict()
 _C.loss.weight_coarse_loss = 1.0
 _C.loss.weight_fine_loss = 1.0
+_C.loss.weight_laplace_loss = 1.0
 
+
+# laplace
+_C.laplace = edict()
+_C.laplace.mask = False
+_C.laplace.loss = False
 
 def make_cfg():
     return _C

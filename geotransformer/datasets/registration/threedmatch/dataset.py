@@ -7,6 +7,8 @@ import numpy as np
 import torch
 import torch.utils.data
 
+import open3d as o3d
+
 from geotransformer.utils.pointcloud import (
     random_sample_rotation,
     random_sample_rotation_v2,
@@ -15,7 +17,7 @@ from geotransformer.utils.pointcloud import (
 from geotransformer.utils.registration import get_correspondences
 
 
-class ThreeDFrontPairDataset(torch.utils.data.Dataset):
+class ThreeDMatchPairDataset(torch.utils.data.Dataset):
     def __init__(
         self,
         dataset_root,
@@ -29,10 +31,10 @@ class ThreeDFrontPairDataset(torch.utils.data.Dataset):
         matching_radius=None,
         rotated=False,
     ):
-        super(ThreeDFrontPairDataset, self).__init__()
+        super(ThreeDMatchPairDataset, self).__init__()
 
         self.dataset_root = dataset_root
-        self.metadata_root = osp.join(self.dataset_root, 'metadata')
+        self.metadata_root = osp.join(self.dataset_root, 'indoor')
         self.data_root = osp.join(self.dataset_root, 'data')
 
         self.subset = subset
@@ -55,10 +57,11 @@ class ThreeDFrontPairDataset(torch.utils.data.Dataset):
                 self.metadata_list = [x for x in self.metadata_list if x['overlap'] > self.overlap_threshold]
 
     def __len__(self):
-        return len(self.metadata_list)
+        return len(self.metadata_list['rot'])
 
     def _load_point_cloud(self, file_name):
-        points = torch.load(osp.join(self.data_root, file_name))
+        pcd = o3d.io.read_point_cloud(osp.join(self.data_root, file_name))
+        points = np.asarray(pcd.points)
         # NOTE: setting "point_limit" with "num_workers" > 1 will cause nondeterminism.
         if self.point_limit is not None and points.shape[0] > self.point_limit:
             indices = np.random.permutation(points.shape[0])[: self.point_limit]
@@ -86,24 +89,37 @@ class ThreeDFrontPairDataset(torch.utils.data.Dataset):
         src_points += (np.random.rand(src_points.shape[0], 3) - 0.5) * self.aug_noise
 
         return ref_points, src_points, rotation, translation
-
+    def convert_path(self, origin):
+        directory, filename = osp.split(origin)
+        new_directory = osp.join(directory, 'fragments')
+        new_filename = osp.splitext(filename)[0] + '.ply'
+        new_path = osp.join(new_directory, new_filename)
+        
+        return new_path
     def __getitem__(self, index):
         data_dict = {}
+        rotation=self.metadata_list['rot'][index]
+        translation=self.metadata_list['trans'][index]
 
+        # get pointcloud
+        src_path=self.convert_path(self.metadata_list['src'][index])
+        #print('src_path',src_path)
+        tgt_path=self.convert_path(self.metadata_list['tgt'][index])
+        #print('tgt_path',tgt_path)
         # metadata
-        metadata: Dict = self.metadata_list[index]
-        data_dict['scene_name'] = metadata['scene_name']
-        data_dict['ref_frame'] = metadata['frag_id0']
-        data_dict['src_frame'] = metadata['frag_id1']
-        data_dict['overlap'] = metadata['overlap']
+        # metadata: Dict = self.metadata_list[index]
+        # data_dict['scene_name'] = metadata['scene_name']
+        # data_dict['ref_frame'] = metadata['frag_id0']
+        # data_dict['src_frame'] = metadata['frag_id1']
+        # data_dict['overlap'] = metadata['overlap']
 
-        # get transformation
-        rotation = metadata['rotation']
-        translation = metadata['translation']
+        # # get transformation
+        # rotation = metadata['rotation']
+        # translation = metadata['translation']
 
         # get point cloud
-        ref_points = self._load_point_cloud(metadata['pcd0'])
-        src_points = self._load_point_cloud(metadata['pcd1'])
+        ref_points = self._load_point_cloud(tgt_path)
+        src_points = self._load_point_cloud(src_path)
 
         # augmentation
         if self.use_augmentation:
@@ -121,7 +137,7 @@ class ThreeDFrontPairDataset(torch.utils.data.Dataset):
             src_points = np.matmul(src_points, src_rotation.T)
             rotation = np.matmul(rotation, src_rotation.T)
 
-        transform = get_transform_from_rotation_translation(rotation, translation)
+        transform = get_transform_from_rotation_translation(rotation, translation.squeeze())
 
         # get correspondences
         if self.return_corr_indices:

@@ -10,7 +10,7 @@ class SuperPointMatching(nn.Module):
         self.num_correspondences = num_correspondences
         self.dual_normalization = dual_normalization
 
-    def forward(self, ref_feats, src_feats, ref_masks=None, src_masks=None):
+    def forward(self, ref_feats, src_feats, ref_masks=None, src_masks=None, laplace_mask=None):
         r"""Extract superpoint correspondences.
 
         Args:
@@ -35,6 +35,13 @@ class SuperPointMatching(nn.Module):
         src_feats = src_feats[src_indices]
         # select top-k proposals
         matching_scores = torch.exp(-pairwise_distance(ref_feats, src_feats, normalized=True))
+        #print('matching_score ', matching_scores.shape)
+        
+        if not (laplace_mask is None):
+            laplace_mask = torch.squeeze(laplace_mask)
+            laplace_mask = laplace_mask[src_indices][:, ref_indices].transpose(0, 1)
+            # print('laplace_mask ', laplace_mask.shape)
+            matching_scores = matching_scores * laplace_mask
         if self.dual_normalization:
             ref_matching_scores = matching_scores / matching_scores.sum(dim=1, keepdim=True)
             src_matching_scores = matching_scores / matching_scores.sum(dim=0, keepdim=True)
