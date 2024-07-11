@@ -33,10 +33,11 @@ class GeoTransformer(nn.Module):
             cfg.backbone.group_norm,
         )
 
-        self.mask_match = cfg.laplace.mask
-        if self.mask_match:
+        self.stage = cfg.laplace.stage
+        self.use_laplace = cfg.laplace.use
+        if not self.stage == 1 and self.use_laplace:
             self.mask = LaplaceMask(cfg.geotransformer.input_dim)
-        #self.loss = LaplaceLoss()
+        #self.loss = LaplaceLoss(stage=self.stage)
         self.transformer = GeometricTransformer(
             cfg.geotransformer.input_dim,
             cfg.geotransformer.output_dim,
@@ -137,9 +138,12 @@ class GeoTransformer(nn.Module):
         # 3. Conditional Transformer
         ref_feats_c = feats_c[:ref_length_c]
         src_feats_c = feats_c[ref_length_c:]
-        if self.mask_match:
+ 
+        if not self.stage == 1 and self.use_laplace:
             mask = self.mask(src_feats_c.unsqueeze(0), ref_feats_c.unsqueeze(0))
             output_dict['corr_sp_mask'] = mask
+        if not self.stage == 3:
+            mask = None
         ref_feats_c, src_feats_c = self.transformer(
             ref_points_c.unsqueeze(0),
             src_points_c.unsqueeze(0),
@@ -160,14 +164,10 @@ class GeoTransformer(nn.Module):
 
         # 6. Select topk nearest node correspondences
         with torch.no_grad():
-            if self.mask_match:
-                ref_node_corr_indices, src_node_corr_indices, node_corr_scores = self.coarse_matching(
-                    ref_feats_c_norm, src_feats_c_norm, ref_node_masks, src_node_masks, mask
-                )
-            else:
-                ref_node_corr_indices, src_node_corr_indices, node_corr_scores = self.coarse_matching(
-                    ref_feats_c_norm, src_feats_c_norm, ref_node_masks, src_node_masks
-                )
+
+            ref_node_corr_indices, src_node_corr_indices, node_corr_scores = self.coarse_matching(
+                ref_feats_c_norm, src_feats_c_norm, ref_node_masks, src_node_masks, mask
+            )
 
             output_dict['ref_node_corr_indices'] = ref_node_corr_indices
             output_dict['src_node_corr_indices'] = src_node_corr_indices

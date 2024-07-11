@@ -90,6 +90,8 @@ class BaseTrainer(abc.ABC):
         self.log_steps = self.args.log_steps
         self.run_grad_check = run_grad_check
         self.save_all_snapshots = save_all_snapshots
+        self.reset_lr = cfg.optim.reset_lr
+        self.lr_rate = cfg.optim.lr
 
         # state
         self.model = None
@@ -185,6 +187,11 @@ class BaseTrainer(abc.ABC):
         if 'scheduler' in state_dict and self.scheduler is not None:
             self.scheduler.load_state_dict(state_dict['scheduler'])
             self.logger.info('Scheduler has been loaded.')
+        if self.reset_lr:
+            for param_group in self.optimizer.param_groups:
+                param_group['lr'] = self.lr_rate * self.world_size
+            self.scheduler.base_lrs = [self.lr_rate * self.world_size for _ in self.scheduler.base_lrs]
+        self.logger.info('reset learning rate')
 
     def register_model(self, model):
         r"""Register model. DDP is automatically used."""

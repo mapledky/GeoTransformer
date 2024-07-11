@@ -1,7 +1,7 @@
 .idea
 .vscode
 build
-output
+output*/
 output_tune
 *.egg-info
 *.so

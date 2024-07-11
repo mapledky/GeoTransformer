@@ -60,10 +60,7 @@ class LaplaceMask(nn.Module):
 
         x = self.attention(x)
         #(B,N+M,input_dim // 4)
-        x_src = x[:,:N,:].unsqueeze(2).expand(-1, -1, M, -1)
-        x_ref = x[:,N:,:].unsqueeze(1).expand(-1, N, -1, -1)
-        x_corr = x_src + x_ref
-        x = x_corr.reshape(B, N * M, -1)
+        
         x = self.lin3(x)
         x = self.relu(x)
         x = self.lin4(x)
@@ -73,7 +70,11 @@ class LaplaceMask(nn.Module):
         x = self.relu(x)
         x = self.lin6(x)
 
-        x = self.sigmoid(x)# B, N*M, 1
+        src = x[:, :N, :]
+        ref = x[:, N:N+M, :]
+        x = src @ ref.transpose(1, 2)
+        x = self.sigmoid(x)# B, N+M, 1
+        
         return x.reshape(B, 1, N, M).contiguous()
 
 

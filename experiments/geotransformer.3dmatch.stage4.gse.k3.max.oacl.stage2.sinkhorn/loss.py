@@ -76,9 +76,10 @@ class OverallLoss(nn.Module):
         super(OverallLoss, self).__init__()
         self.coarse_loss = CoarseMatchingLoss(cfg)
         self.fine_loss = FineMatchingLoss(cfg)
-        self.use_laplace = cfg.laplace.loss
+        self.stage = cfg.laplace.stage
+        self.use_laplace = cfg.laplace.use
         if self.use_laplace:
-            self.laplace_loss = LaplaceLoss()
+            self.laplace_loss = LaplaceLoss(stage=self.stage)
         self.weight_coarse_loss = cfg.loss.weight_coarse_loss
         self.weight_fine_loss = cfg.loss.weight_fine_loss
         self.weight_laplace_loss = cfg.loss.weight_laplace_loss
@@ -89,20 +90,20 @@ class OverallLoss(nn.Module):
         if self.use_laplace:
             laplace_loss, corr_loss, mask_loss = self.laplace_loss(output_dict, data_dict)
             loss = self.weight_coarse_loss * coarse_loss + self.weight_fine_loss * fine_loss + self.weight_laplace_loss * laplace_loss
+            return {
+                'loss': loss,
+                'c_loss': coarse_loss,
+                'f_loss': fine_loss,
+                'laplace_loss': laplace_loss,
+                'corr_loss': corr_loss
+            }
         else:
             loss = self.weight_coarse_loss * coarse_loss + self.weight_fine_loss * fine_loss
             return {
-            'loss': loss,
-            'c_loss': coarse_loss,
-            'f_loss': fine_loss,
+                'loss': loss,
+                'c_loss': coarse_loss,
+                'f_loss': fine_loss,
             }
-        return {
-            'loss': loss,
-            'c_loss': coarse_loss,
-            'f_loss': fine_loss,
-            'laplace_loss': laplace_loss,
-            'corr_loss': corr_loss
-        }
 
 
 class Evaluator(nn.Module):
