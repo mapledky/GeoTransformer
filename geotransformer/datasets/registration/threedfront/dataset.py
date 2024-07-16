@@ -48,13 +48,13 @@ class ThreeDFrontPairDataset(torch.utils.data.Dataset):
         self.aug_noise = augmentation_noise
         self.aug_rotation = augmentation_rotation
 
-        self.data_list = self._build_data_list('pro25/high', file_number[0], test)
-        self.data_list.extend(self._build_data_list('pro25/low', file_number[1], test))
-        self.data_list.extend(self._build_data_list('pro40/high', file_number[2], test))
-        self.data_list.extend(self._build_data_list('pro40/low', file_number[3], test))
+        self.data_list = self._build_data_list('sp/high', file_number[0], test)
+        self.data_list.extend(self._build_data_list('sp/low', file_number[1], test))
+        self.data_list.extend(self._build_data_list('bp/high', file_number[2], test))
+        self.data_list.extend(self._build_data_list('bp/low', file_number[3], test))
 
 
-    def _build_data_list(self,file_name='pro25/high',file_number=2000, test=False):
+    def _build_data_list(self,file_name='sp/high',file_number=1000, test=False):
         data_list = []
         
         subset_path = osp.join(self.dataset_root, file_name)

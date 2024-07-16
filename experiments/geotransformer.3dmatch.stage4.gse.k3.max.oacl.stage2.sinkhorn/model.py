@@ -35,9 +35,13 @@ class GeoTransformer(nn.Module):
 
         self.stage = cfg.laplace.stage
         self.use_laplace = cfg.laplace.use
-        if not self.stage == 1 and self.use_laplace:
-            self.mask = LaplaceMask(cfg.geotransformer.input_dim)
-        #self.loss = LaplaceLoss(stage=self.stage)
+        self.corr_mlp = False
+        if self.use_laplace:
+            if not self.stage == 1:
+                self.mask = LaplaceMask(cfg.geotransformer.input_dim)
+            self.corr_mlp = cfg.laplace.corr_mlp
+            
+        self.loss = LaplaceLoss(stage=self.stage,max_points=cfg.coarse_matching.num_correspondences, corr_mlp=self.corr_mlp)
         self.transformer = GeometricTransformer(
             cfg.geotransformer.input_dim,
             cfg.geotransformer.output_dim,
@@ -55,7 +59,7 @@ class GeoTransformer(nn.Module):
         )
 
         self.coarse_matching = SuperPointMatching(
-            cfg.coarse_matching.num_correspondences, cfg.coarse_matching.dual_normalization
+            cfg.coarse_matching.num_correspondences, cfg.coarse_matching.dual_normalization, self.corr_mlp
         )
 
         self.fine_matching = LocalGlobalRegistration(
@@ -163,15 +167,15 @@ class GeoTransformer(nn.Module):
         output_dict['src_feats_f'] = src_feats_f
 
         # 6. Select topk nearest node correspondences
+
+        ref_node_corr_indices, src_node_corr_indices, node_corr_scores, corr_num_mlp = self.coarse_matching(
+            ref_feats_c_norm, src_feats_c_norm, ref_node_masks, src_node_masks, mask
+        )
+        output_dict['ref_node_corr_indices'] = ref_node_corr_indices
+        output_dict['src_node_corr_indices'] = src_node_corr_indices
+        if not corr_num_mlp == None:
+            output_dict['corr_num_mlp'] = corr_num_mlp
         with torch.no_grad():
-
-            ref_node_corr_indices, src_node_corr_indices, node_corr_scores = self.coarse_matching(
-                ref_feats_c_norm, src_feats_c_norm, ref_node_masks, src_node_masks, mask
-            )
-
-            output_dict['ref_node_corr_indices'] = ref_node_corr_indices
-            output_dict['src_node_corr_indices'] = src_node_corr_indices
-
             # 7 Random select ground truth node correspondences during training
             if self.training:
                 ref_node_corr_indices, src_node_corr_indices, node_corr_scores = self.coarse_target(

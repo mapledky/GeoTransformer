@@ -11,7 +11,7 @@ from model import create_model
 from loss import OverallLoss, Evaluator
 """
 CUDA_VISIBLE_DEVICES=0 python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/trainval_front.py
-python -m torch.distributed.launch --nproc_per_node=7 code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/trainval_front.py
+python -m torch.distributed.launch --nproc_per_node=8 code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/trainval_front.py
 """
 class Trainer(EpochBasedTrainer):
     def __init__(self, cfg):

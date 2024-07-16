@@ -9,7 +9,7 @@ from geotransformer.utils.data import (
 def train_valid_data_loader(cfg, distributed):
     train_dataset = ThreeDFrontPairDataset(
         cfg.data.dataset_root,
-        file_number=[8000,6600,3100,5700],
+        file_number=[7500,6500,3000,5000],
         point_limit=cfg.train.point_limit,
         use_augmentation=cfg.train.use_augmentation,
         augmentation_noise=cfg.train.augmentation_noise,

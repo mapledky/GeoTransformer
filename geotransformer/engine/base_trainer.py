@@ -191,7 +191,7 @@ class BaseTrainer(abc.ABC):
             for param_group in self.optimizer.param_groups:
                 param_group['lr'] = self.lr_rate * self.world_size
             self.scheduler.base_lrs = [self.lr_rate * self.world_size for _ in self.scheduler.base_lrs]
-        self.logger.info('reset learning rate')
+            self.logger.info('reset learning rate')
 
     def register_model(self, model):
         r"""Register model. DDP is automatically used."""

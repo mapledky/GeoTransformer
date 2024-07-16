@@ -3,7 +3,7 @@ import os
 import numpy as np
 import random
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '3'
+os.environ["CUDA_VISIBLE_DEVICES"] = '0'
 import torch
 
 from geotransformer.utils.data import registration_collate_fn_stack_mode
@@ -12,7 +12,7 @@ from geotransformer.utils.open3d import make_open3d_point_cloud, get_color, draw
 from geotransformer.utils.registration import compute_registration_error
 from geotransformer.modules.registration import weighted_procrustes
 from geotransformer.utils.open3d import registration_with_ransac_from_correspondences
-from config_front_test import make_cfg
+from config_front import make_cfg
 from model import create_model
 from tqdm import tqdm
 import open3d as o3d
@@ -22,7 +22,7 @@ import shutil
 """"
 python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir wi/low --weights code/GeoTransformer-main/assets/geotransformer-3dmatch.pth.tar
 
-python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir bp/low --weights code/GeoTransformer-main/output_stage1/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-25.pth.tar --tune 1
+python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir sp/low --weights code/GeoTransformer-main/output_stage1/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/snapshot.pth.tar --tune 1
 
 python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir pro40/low --way ransac --tune 1
 
@@ -128,7 +128,7 @@ def ransac_test(data_dir, tune='0'):
     subdirs = [os.path.join(dp, d) for dp, dn, filenames in os.walk(data_dir) for d in dn]    
     total_subdirs = len(subdirs)
     if total_subdirs > 1000:
-        subdirs = subdirs[:1000]
+        subdirs = subdirs[total_subdirs-10:]
     total_subdirs = len(subdirs)
     rre_true = []
     rte_true = []
@@ -230,7 +230,7 @@ def ransac_test(data_dir, tune='0'):
         print(f"avg RRE_wo_anim(deg): {rre_wo_anim_all / num_pairs_wo_anim:.3f}, avg RTE_wo_anim(m): {rte_wo_anim_all / num_pairs_wo_anim:.3f}")
 
 
-def batch_test(data_dir, weights, tune=0):
+def batch_test(data_dir, weights, tune=0, rec_corr=0):
     print(data_dir)
     cfg = make_cfg()
 
@@ -274,8 +274,8 @@ def batch_test(data_dir, weights, tune=0):
     subdirs = [os.path.join(dp, d) for dp, dn, filenames in os.walk(data_dir) for d in dn]    
     total_subdirs = len(subdirs)
 
-    if total_subdirs > 1000:
-        subdirs = subdirs[:1000]
+    if total_subdirs > 500:
+        subdirs = subdirs[total_subdirs - 10:]
     total_subdirs = len(subdirs)
 
     with tqdm(total=total_subdirs, desc='Processing subdirectories') as pbar:
@@ -310,7 +310,8 @@ def batch_test(data_dir, weights, tune=0):
                     ouput_corr = os.path.join(subdir_path, 'corr_true_tune.npy')
                 else:
                     ouput_corr = os.path.join(subdir_path, 'corr_true.npy')
-                np.save(ouput_corr, corr)
+                if rec_corr:
+                    np.save(ouput_corr, corr)
                 rmse = compute_RMSE(data_dict_true.get('src_points'), data_dict_true.get('transform'), estimate_rt)
                 print('rmse_true ' , rmse)
                 rre_true_all += rre
@@ -334,7 +335,8 @@ def batch_test(data_dir, weights, tune=0):
                     ouput_corr = os.path.join(subdir_path, 'corr_wo_anim_tune.npy')
                 else:
                     ouput_corr = os.path.join(subdir_path, 'corr_wo_anim.npy')
-                np.save(ouput_corr, corr)
+                if rec_corr:
+                    np.save(ouput_corr, corr)
                 rmse = compute_RMSE(data_dict_wo_anim.get('src_points'),  data_dict_wo_anim.get('transform'), estimate_rt)
                 print('rmse_wo_anim ' , rmse)
                 rre_wo_anim_all += rre
@@ -381,7 +383,7 @@ def batch_test(data_dir, weights, tune=0):
 def main():
     parser = make_parser()
     args = parser.parse_args()
-    dataset = os.path.join('dataset/3D-Deforming-FRONT-v4s/rawdata', args.data_dir)
+    dataset = os.path.join('dataset/3D-Deforming-FRONT-v5/rawdata', args.data_dir)
     if args.way == 'lgr':
         batch_test(dataset, args.weights, tune=args.tune)
     else:

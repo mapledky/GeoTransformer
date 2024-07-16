@@ -22,9 +22,9 @@ import json
 import shutil
 
 """"
-python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir wi/low --weights code/GeoTransformer-main/assets/geotransformer-3dmatch.pth.tar
+python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/test_vis.py --data_dir sp/low --weights code/GeoTransformer-main/assets/geotransformer-3dmatch.pth.tar
 
-python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir bp/low --weights code/GeoTransformer-main/assets/laplace/per_corr/epoch-49.pth.tar
+python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/test_vis.py --data_dir sp/low --weights code/GeoTransformer-main/output/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-29.pth.tar
 """
 
 
@@ -32,7 +32,7 @@ def make_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data_dir", required=True, help="directory containing the point cloud data pairs")
     parser.add_argument("--weights", default='0', help="model weights file")
-    parser.add_argument("--show_corr", default=False)
+    parser.add_argument("--show_corr", default=True)
     return parser
 
 
@@ -136,40 +136,35 @@ def show_corr(src_points, ref_points, corr, save_file):
         lines.append([start_index, end_index])
 
     line_set.lines = o3d.utility.Vector2iVector(lines)
-    line_set.paint_uniform_color([251/255, 221/255, 133/255]) #黄色
+    line_set.paint_uniform_color([0, 255/255, 0]) #green
 
     o3d.io.write_point_cloud(save_points_file, combined_pcd)
     o3d.io.write_line_set(save_lines_file, line_set)
 
 
-def savePC(pcd_np, output_path, src=True):
+def savePC(pcd_np, super_pcd, output_path,src = True):
+    with open(output_path, 'w') as file:
+        pass  # 创建空文件
     point_cloud = o3d.geometry.PointCloud()
     point_cloud.points = o3d.utility.Vector3dVector(pcd_np)
     if src:
-        point_cloud.paint_uniform_color([207/255, 67/255, 62/255])  # red
-    else:
         point_cloud.paint_uniform_color([64/255, 57/255, 144/255])  # blue
+    else:
+        point_cloud.paint_uniform_color([251/255, 221/255, 133/255])  # yellow
+    # Create the super point cloud
+    super_point_cloud = o3d.geometry.PointCloud()
+    super_point_cloud.points = o3d.utility.Vector3dVector(super_pcd)
+    super_point_cloud.paint_uniform_color([255/255, 0/255, 0/255])  # red
+
+    point_cloud = point_cloud + super_point_cloud
     o3d.io.write_point_cloud(output_path, point_cloud)
+    return point_cloud
 
-def combinePC(src_pcd_path, ref_pcd_path, gt, output_path='combine.pcd'):
-
-    points_src = np.load(src_pcd_path)
-    points_ref = np.load(ref_pcd_path)
-
-    point_cloud_src = o3d.geometry.PointCloud()
-    point_cloud_src.points = o3d.utility.Vector3dVector(points_src)
-
-    point_cloud_ref = o3d.geometry.PointCloud()
-    point_cloud_ref.points = o3d.utility.Vector3dVector(points_ref)
-
-    
+def combinePC(point_cloud_src, point_cloud_ref, gt, output_path='combine.pcd'):    
+    with open(output_path, 'w') as file:
+        pass  # 创建空文件
     point_cloud_src.transform(gt)
-    
-    point_cloud_src.paint_uniform_color([207/255, 67/255, 62/255])  # red
-    point_cloud_ref.paint_uniform_color([64/255, 57/255, 144/255])  # blue
-    
     combined_pcd = point_cloud_src + point_cloud_ref
-    
     o3d.io.write_point_cloud(output_path, combined_pcd)
 
 
@@ -212,11 +207,11 @@ def batch_test(data_dir, weights, corr_record=False):
     
     num_pairs_true = 0
     num_pairs_true_pair = 0
-    subdirs = [os.path.join(dp, d) for dp, dn, filenames in os.walk(data_dir) for d in dn]    
+    subdirs = [os.path.join(data_dir, d) for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))] 
     total_subdirs = len(subdirs)
 
-    if total_subdirs > 1000:
-        subdirs = subdirs[:1000]
+    if total_subdirs > 20:
+        subdirs = subdirs[:20]
     total_subdirs = len(subdirs)
 
     with tqdm(total=total_subdirs, desc='Processing subdirectories') as pbar:
@@ -225,7 +220,7 @@ def batch_test(data_dir, weights, corr_record=False):
             if not os.path.isdir(subdir_path):
                 print(subdir_path)
                 continue
-
+            print(subdir_path)
             src_true_file = os.path.join(subdir_path, 'src.npy')
             ref_true_file = os.path.join(subdir_path, 'ref.npy')
 
@@ -265,14 +260,18 @@ def batch_test(data_dir, weights, corr_record=False):
                 continue
 
             #correspondence showing
-            corr_out_succ = os.path.join(subdir_path, 'succ')
-            corr_out_fail = os.path.join(subdir_path, 'fail')
+            corr_out_succ = os.path.join(subdir_path, 'succ_tune')
+            corr_out_fail = os.path.join(subdir_path, 'fail_tune')
             
             if rmse_true != None:
                 if rmse_true < 0.2:
+                    os.makedirs(corr_out_succ, exist_ok=True)
+                    pc_src = savePC(data_dict_true.get('src_points'), corr[:,0:3], os.path.join(corr_out_succ, 'src_sp.pcd'))
+                    pc_ref = savePC(data_dict_true.get('ref_points'), corr[:,3:6], os.path.join(corr_out_succ, 'ref_sp.pcd'), src=False)
+                    combinePC(pc_src, pc_ref, data_dict_true.get('transform'), os.path.join(corr_out_succ, 'combine.pcd'))
                     corr_out_src = os.path.join(corr_out_succ, 'src.png')
                     corr_out_ref = os.path.join(corr_out_succ, 'ref.png')
-                    if len(np.load(src_true_file)) > 1000 and len(np.load(ref_true_file)) > 1000:
+                    if len(np.load(src_true_file)) > 1000 or len(np.load(ref_true_file)) > 1000:
                         show_corr(src_true_file, ref_true_file, corr_points, corr_out_succ)
                         destination_dir = os.path.dirname(corr_out_src)
                         os.makedirs(destination_dir, exist_ok=True)
@@ -281,9 +280,13 @@ def batch_test(data_dir, weights, corr_record=False):
                         shutil.copyfile(src_true_img, corr_out_src)
                         shutil.copyfile(ref_true_img, corr_out_ref)
                 if rmse_true> 0.2:
+                    os.makedirs(corr_out_fail, exist_ok=True)
+                    pc_src = savePC(data_dict_true.get('src_points'), corr[:,0:3], os.path.join(corr_out_fail, 'src_sp.pcd'))
+                    pc_ref = savePC(data_dict_true.get('ref_points'), corr[:,3:6], os.path.join(corr_out_fail, 'ref_sp.pcd'), src=False)
+                    combinePC(pc_src, pc_ref, data_dict_true.get('transform'), os.path.join(corr_out_fail, 'combine.pcd'))
                     corr_out_src = os.path.join(corr_out_fail, 'src.png')
                     corr_out_ref = os.path.join(corr_out_fail, 'ref.png')
-                    if len(np.load(src_true_file)) > 10000 or len(np.load(ref_true_file)) > 10000:
+                    if len(np.load(src_true_file)) > 1000 or len(np.load(ref_true_file)) > 1000:
                         show_corr(src_true_file, ref_true_file, corr_points, corr_out_fail)
                         destination_dir = os.path.dirname(corr_out_src)
                         os.makedirs(destination_dir, exist_ok=True)
@@ -305,7 +308,7 @@ def batch_test(data_dir, weights, corr_record=False):
 def main():
     parser = make_parser()
     args = parser.parse_args()
-    dataset = os.path.join('dataset/3D-Deforming-FRONT-v4s/test', args.data_dir)
+    dataset = os.path.join('dataset/3D-Deforming-FRONT-v5/rawdata', args.data_dir)
     batch_test(dataset,args.weights,corr_record=args.show_corr)
 
 if __name__ == "__main__":

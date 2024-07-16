@@ -74,12 +74,13 @@ def get_correspondences(ref_points, src_points, transform, matching_radius):
     return corr_indices
 
 class LaplaceLoss(nn.Module):
-    def __init__(self, matching_radius=0.1,max_points=256, stage=1):
+    def __init__(self, matching_radius=0.1,max_points=256, stage=1, corr_mlp=False):
         super(LaplaceLoss, self).__init__()
         self.loss = NLLLaplace()
         self.matching_radius = matching_radius
         self.stage = stage
         self.max_points = max_points
+        self.corr_mlp = corr_mlp
         
     def forward(self, output_dict, data_dict):
         device = output_dict['src_points'].device
@@ -133,6 +134,9 @@ class LaplaceLoss(nn.Module):
         corr_gt[~mask] = 0
 
         indices_back = np.sum(np.array(corr_gt.cpu().detach()) > 0)
+        if self.corr_mlp:
+            corr_num_mlp = output_dict['corr_num_mlp'].to(device)
+            self.max_points = int(corr_num_mlp.item())
         if indices_back > self.max_points:
             ones_indices = torch.nonzero(corr_gt, as_tuple=False)
             scores = corr_overlap[ones_indices[:, 0], ones_indices[:, 1]]
@@ -148,5 +152,10 @@ class LaplaceLoss(nn.Module):
         else:
             corr_sp_mask = output_dict['corr_sp_mask'].to(device)
         loss = self.loss(corr_gt.unsqueeze(0).unsqueeze(0), corr_es.unsqueeze(0).unsqueeze(0), (1 - corr_sp_mask))
-        return loss
+
+        gt_corr_num = (corr_gt > 0).sum()
+        if self.corr_mlp:
+            loss_corr_num = (corr_num_mlp - gt_corr_num) / corr_num_mlp
+            return loss, loss_corr_num
+        return loss, torch.tensor(0., device=device)
 
