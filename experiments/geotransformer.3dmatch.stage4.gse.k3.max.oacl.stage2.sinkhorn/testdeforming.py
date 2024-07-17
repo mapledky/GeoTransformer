@@ -20,9 +20,9 @@ import json
 import shutil
 
 """"
-python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir wi/low --weights code/GeoTransformer-main/assets/geotransformer-3dmatch.pth.tar
+python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir sp/low --weights code/GeoTransformer-main/assets/geotransformer-3dmatch.pth.tar
 
-python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir sp/low --weights code/GeoTransformer-main/output_stage1/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/snapshot.pth.tar --tune 1
+python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir bp/low --weights code/GeoTransformer-main/output_stage1/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-36.pth.tar --tune 1
 
 python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir pro40/low --way ransac --tune 1
 

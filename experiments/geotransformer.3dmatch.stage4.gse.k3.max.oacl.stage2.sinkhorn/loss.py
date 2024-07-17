@@ -79,7 +79,7 @@ class OverallLoss(nn.Module):
         self.stage = cfg.laplace.stage
         self.use_laplace = cfg.laplace.use
         if self.use_laplace:
-            self.laplace_loss = LaplaceLoss(stage=self.stage, max_points=cfg.coarse_matching.num_correspondences, corr_mlp=cfg.laplace.corr_mlp)
+            self.laplace_loss = LaplaceLoss(stage=self.stage, max_points=cfg.coarse_matching.num_correspondences, corr_mlp=cfg.laplace.corr_mlp, corr_mlp_min=cfg.laplace.corr_mlp_min)
         self.weight_coarse_loss = cfg.loss.weight_coarse_loss
         self.weight_fine_loss = cfg.loss.weight_fine_loss
         self.weight_laplace_loss = cfg.loss.weight_laplace_loss

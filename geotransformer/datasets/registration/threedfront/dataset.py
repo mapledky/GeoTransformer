@@ -48,21 +48,28 @@ class ThreeDFrontPairDataset(torch.utils.data.Dataset):
         self.aug_noise = augmentation_noise
         self.aug_rotation = augmentation_rotation
 
-        self.data_list = self._build_data_list('sp/high', file_number[0], test)
-        self.data_list.extend(self._build_data_list('sp/low', file_number[1], test))
-        self.data_list.extend(self._build_data_list('bp/high', file_number[2], test))
-        self.data_list.extend(self._build_data_list('bp/low', file_number[3], test))
+        if test:
+            print('construct test dataset')
+            self.data_list = self._build_data_list('test/sp/high', file_number[0])
+            self.data_list.extend(self._build_data_list('test/sp/low', file_number[1]))
+            self.data_list.extend(self._build_data_list('test/bp/high', file_number[2]))
+            self.data_list.extend(self._build_data_list('test/bp/low', file_number[3]))
+        else:
+            print('construct train dataset')
+            self.data_list = self._build_data_list('rawdata/sp/high', file_number[0])
+            self.data_list.extend(self._build_data_list('rawdata/sp/low', file_number[1]))
+            self.data_list.extend(self._build_data_list('rawdata/bp/high', file_number[2]))
+            self.data_list.extend(self._build_data_list('rawdata/bp/low', file_number[3]))
 
 
-    def _build_data_list(self,file_name='sp/high',file_number=1000, test=False):
+    def _build_data_list(self,file_name='rawdata/sp/high',file_number=1000, test=False):
         data_list = []
         
         subset_path = osp.join(self.dataset_root, file_name)
 
         total = 0
         scene_ids = os.listdir(subset_path)
-        if test:
-            scene_ids = sorted(scene_ids, reverse=True)
+
         for scene_id in scene_ids:
             scene_path = osp.join(subset_path, scene_id)
             if osp.isdir(scene_path):

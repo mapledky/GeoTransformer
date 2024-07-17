@@ -70,12 +70,12 @@ class LaplaceMask(nn.Module):
         x = self.relu(x)
         x = self.lin6(x)
 
-        src = x[:, :N, :]
-        ref = x[:, N:N+M, :]
-        x = src @ ref.transpose(1, 2)
+        # src = x[:, :N, :]
+        # ref = x[:, N:N+M, :]
+        # x = src @ ref.transpose(1, 2)
         x = self.sigmoid(x)# B, N+M, 1
         
-        return x.reshape(B, 1, N, M).contiguous()
+        return x.reshape(B, 1, N + M).contiguous()
 
 
 

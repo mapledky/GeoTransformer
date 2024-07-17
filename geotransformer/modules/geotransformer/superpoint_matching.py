@@ -7,11 +7,13 @@ import numpy as np
 
 
 class SuperPointMatching(nn.Module):
-    def __init__(self, num_correspondences, dual_normalization=True, corr_mlp=False, hidden_n=16):
+    def __init__(self, num_correspondences, dual_normalization=True, corr_mlp=False, hidden_n=64, mlp_max=128, mlp_min=32):
         super(SuperPointMatching, self).__init__()
         self.num_correspondences = num_correspondences
         self.dual_normalization = dual_normalization
         self.corr_mlp = corr_mlp
+        self.mlp_max = mlp_max
+        self.mlp_min = mlp_min
         if corr_mlp:
             self.corr_mlp_module = CorrMlp(1, hidden_n)
 
@@ -51,12 +53,11 @@ class SuperPointMatching(nn.Module):
             ref_matching_scores = matching_scores / matching_scores.sum(dim=1, keepdim=True)
             src_matching_scores = matching_scores / matching_scores.sum(dim=0, keepdim=True)
             matching_scores = ref_matching_scores * src_matching_scores
-        
+        # print('matching ',np.sum(np.array(matching_scores.cpu().detach()) > 0))
         if self.corr_mlp:
-            corr_num_mlp = self.corr_mlp_module(matching_scores)
-            corr_num_mlp = corr_num_mlp * self.num_correspondences
-            corr_num_mlp = torch.round(corr_num_mlp)
-            num_correspondences = int(min(corr_num_mlp, matching_scores.numel()).item())
+            corr_num_mlp = self.corr_mlp_module(matching_scores.detach())
+            corr_num_mlp = corr_num_mlp * self.mlp_max
+            num_correspondences = max(self.mlp_min, int(min(corr_num_mlp, matching_scores.numel()).item()))
         else:
             corr_num_mlp = None
             num_correspondences = min(self.num_correspondences, matching_scores.numel())

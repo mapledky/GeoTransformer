@@ -11,6 +11,7 @@ from geotransformer.utils.torch import to_cuda
 from geotransformer.utils.summary_board import SummaryBoard
 from geotransformer.utils.timer import Timer
 from geotransformer.utils.common import get_log_string
+import torch.distributed as dist
 
 
 class EpochBasedTrainer(BaseTrainer):
@@ -149,6 +150,7 @@ class EpochBasedTrainer(BaseTrainer):
             timer.add_process_time()
             self.after_val_step(self.epoch, self.inner_iteration, data_dict, output_dict, result_dict)
             result_dict = self.release_tensors(result_dict)
+            result_dict = self.sync_result_dict(result_dict)
             summary_board.update_from_result_dict(result_dict)
             message = get_log_string(
                 result_dict=summary_board.summary(),
@@ -165,6 +167,17 @@ class EpochBasedTrainer(BaseTrainer):
         self.logger.critical(message)
         self.write_event('val', summary_dict, self.epoch)
         self.set_train_mode()
+
+    def sync_result_dict(self, result_dict):
+        keys = list(result_dict.keys())
+        values = list(result_dict.values())
+        values = [torch.tensor(v, dtype=torch.float32).cuda() if not torch.is_tensor(v) else v.cuda() for v in values]
+        for i, v in enumerate(values):
+            dist.all_reduce(v, op=dist.ReduceOp.SUM)
+            values[i] = v / dist.get_world_size()
+        for k, v in zip(keys, values):
+            result_dict[k] = v.item() if v.numel() == 1 else v
+        return result_dict
 
     def run(self):
         assert self.train_loader is not None

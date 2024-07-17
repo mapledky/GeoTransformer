@@ -16,7 +16,7 @@ _C.seed = 7351
 _C.working_dir = osp.dirname(osp.realpath(__file__))
 _C.root_dir = osp.dirname(osp.dirname(_C.working_dir))
 _C.exp_name = osp.basename(_C.working_dir)
-_C.output_dir = osp.join(_C.root_dir, 'output_stage1_corrnum', _C.exp_name)
+_C.output_dir = osp.join(_C.root_dir, 'output_stage1_corrnum_norm', _C.exp_name)
 _C.snapshot_dir = osp.join(_C.output_dir, 'snapshots')
 _C.log_dir = osp.join(_C.output_dir, 'logs')
 _C.event_dir = osp.join(_C.output_dir, 'events')
@@ -32,7 +32,7 @@ ensure_dir(_C.registration_dir)
 
 # data
 _C.data = edict()
-_C.data.dataset_root = 'dataset/3D-Deforming-FRONT-v5/rawdata/'
+_C.data.dataset_root = 'dataset/3D-Deforming-FRONT-v5/'
 
 #resume
 #_C.snapshot = osp.join(_C.output_dir, 'snapshots/snapshot.pth.tar')
@@ -102,7 +102,7 @@ _C.model.num_sinkhorn_iterations = 100
 _C.coarse_matching = edict()
 _C.coarse_matching.num_targets = 128
 _C.coarse_matching.overlap_threshold = 0.1
-_C.coarse_matching.num_correspondences = 256
+_C.coarse_matching.num_correspondences = 128
 _C.coarse_matching.dual_normalization = True
 
 # model - GeoTransformer
@@ -147,13 +147,17 @@ _C.loss = edict()
 _C.loss.weight_coarse_loss = 1.0
 _C.loss.weight_fine_loss = 1.0
 _C.loss.weight_laplace_loss = 1.0
-_C.loss.weight_corr_num_loss = 2.0
+_C.loss.weight_corr_num_loss = 1.0
 
 # laplace
 _C.laplace = edict()
 _C.laplace.use = True
-_C.laplace.corr_mlp = True
+_C.laplace.corr_mlp = False
 _C.laplace.stage = 1
+
+_C.laplace.corr_mlp_max = 128
+_C.laplace.corr_mlp_min = 64
+_C.laplace.corr_mlp_hidden = 64
 
 def make_cfg():
     return _C

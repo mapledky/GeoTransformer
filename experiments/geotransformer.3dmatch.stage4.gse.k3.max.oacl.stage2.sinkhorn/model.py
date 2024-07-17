@@ -59,7 +59,7 @@ class GeoTransformer(nn.Module):
         )
 
         self.coarse_matching = SuperPointMatching(
-            cfg.coarse_matching.num_correspondences, cfg.coarse_matching.dual_normalization, self.corr_mlp
+            cfg.coarse_matching.num_correspondences, cfg.coarse_matching.dual_normalization, self.corr_mlp, cfg.laplace.corr_mlp_hidden, cfg.laplace.corr_mlp_max, cfg.laplace.corr_mlp_min
         )
 
         self.fine_matching = LocalGlobalRegistration(
