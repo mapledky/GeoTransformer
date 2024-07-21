@@ -93,11 +93,10 @@ class OverallLoss(nn.Module):
             loss = self.weight_coarse_loss * coarse_loss + self.weight_fine_loss * fine_loss + self.weight_laplace_loss * laplace_loss + self.weight_corr_num_loss * corr_num_loss
             return {
                 'loss': loss,
-                'c_loss': coarse_loss,
-                'f_loss': fine_loss,
+                # 'c_loss': coarse_loss,
+                # 'f_loss': fine_loss,
                 'laplace_loss': laplace_loss,
-                'corr_loss': corr_loss,
-                'corr_num_loss': corr_num_loss
+                'corr_loss': corr_loss
             }
         else:
             loss = self.weight_coarse_loss * coarse_loss + self.weight_fine_loss * fine_loss

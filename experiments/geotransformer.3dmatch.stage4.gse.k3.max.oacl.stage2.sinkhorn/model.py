@@ -38,10 +38,10 @@ class GeoTransformer(nn.Module):
         self.corr_mlp = False
         if self.use_laplace:
             if not self.stage == 1:
-                self.mask = LaplaceMask(cfg.geotransformer.input_dim)
+                self.mask = LaplaceMask(cfg)
             self.corr_mlp = cfg.laplace.corr_mlp
             
-        self.loss = LaplaceLoss(stage=self.stage,max_points=cfg.coarse_matching.num_correspondences, corr_mlp=self.corr_mlp)
+        #self.loss = LaplaceLoss(stage=self.stage,max_points=cfg.coarse_matching.num_correspondences, corr_mlp=self.corr_mlp)
         self.transformer = GeometricTransformer(
             cfg.geotransformer.input_dim,
             cfg.geotransformer.output_dim,
@@ -144,7 +144,12 @@ class GeoTransformer(nn.Module):
         src_feats_c = feats_c[ref_length_c:]
  
         if not self.stage == 1 and self.use_laplace:
-            mask = self.mask(src_feats_c.unsqueeze(0), ref_feats_c.unsqueeze(0))
+            mask = self.mask(
+                ref_points_c.unsqueeze(0),
+                src_points_c.unsqueeze(0),
+                ref_feats_c.unsqueeze(0),
+                src_feats_c.unsqueeze(0),
+            )
             output_dict['corr_sp_mask'] = mask
         if not self.stage == 3:
             mask = None

@@ -31,6 +31,8 @@ class SuperPointMatching(nn.Module):
             src_corr_indices (LongTensor): indices of the corresponding superpoints in source point cloud.
             corr_scores (Tensor): scores of the correspondences.
         """
+        n, _ = src_feats.shape
+        m, _ = ref_feats.shape
         if ref_masks is None:
             ref_masks = torch.ones(size=(ref_feats.shape[0],), dtype=torch.bool).cuda()
         if src_masks is None:
@@ -46,9 +48,12 @@ class SuperPointMatching(nn.Module):
         
         if not (laplace_mask is None):
             laplace_mask = torch.squeeze(laplace_mask)
-            laplace_mask = laplace_mask[src_indices][:, ref_indices].transpose(0, 1)
+            laplace_mask_src = laplace_mask[:n]
+            laplace_mask_ref = laplace_mask[n:n+m]
+            laplace_mask_ref = laplace_mask_ref[ref_indices].unsqueeze(-1)
+            laplace_mask_src = laplace_mask_src[src_indices]
             # print('laplace_mask ', laplace_mask.shape)
-            matching_scores = matching_scores * laplace_mask
+            matching_scores =laplace_mask_ref * matching_scores * laplace_mask_src
         if self.dual_normalization:
             ref_matching_scores = matching_scores / matching_scores.sum(dim=1, keepdim=True)
             src_matching_scores = matching_scores / matching_scores.sum(dim=0, keepdim=True)

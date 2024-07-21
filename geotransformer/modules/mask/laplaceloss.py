@@ -29,11 +29,14 @@ class NLLLaplace:
         not_equal_count = torch.sum(not_equal_mask)
         src_mask = log_var_mask[:, :, :n]
         ref_mask = log_var_mask[:, :, n:n+m]
+        laplace_mask = (src_mask.transpose(1, 2) @ ref_mask).reshape(b, 1, n, m)
         #print('count', not_equal_count)
-        loss1 = math.sqrt(2) * indice_ratio * torch.exp(-1. * src_mask).unsqueeze(-1) * \
-            torch.abs(corr_gt - corr_es) * torch.exp(-1. * ref_mask)
+        # loss1 = math.sqrt(2) * indice_ratio * torch.exp(-0.5 * src_mask).unsqueeze(-1) * \
+        #     torch.abs(corr_gt - corr_es) * torch.exp(-0.5 * ref_mask)
+        loss1 = math.sqrt(2) * indice_ratio * torch.exp(-0.5 * laplace_mask) * \
+             torch.abs(corr_gt - corr_es)
         # each dimension is multiplied
-        loss2 = 0.5 * (src_mask.transpose(1, 2) @ ref_mask).reshape(b, 1, n, m)
+        loss2 = 0.5 * laplace_mask
         # print('loss1', loss1.mean())
         # print('loss2', loss2.mean())
         loss = loss1 + loss2

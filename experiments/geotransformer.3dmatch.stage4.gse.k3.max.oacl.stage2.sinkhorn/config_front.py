@@ -16,7 +16,7 @@ _C.seed = 7351
 _C.working_dir = osp.dirname(osp.realpath(__file__))
 _C.root_dir = osp.dirname(osp.dirname(_C.working_dir))
 _C.exp_name = osp.basename(_C.working_dir)
-_C.output_dir = osp.join(_C.root_dir, 'output_stage1_corrnum_norm', _C.exp_name)
+_C.output_dir = osp.join(_C.root_dir, 'output_stage2_96_cross', _C.exp_name)
 _C.snapshot_dir = osp.join(_C.output_dir, 'snapshots')
 _C.log_dir = osp.join(_C.output_dir, 'logs')
 _C.event_dir = osp.join(_C.output_dir, 'events')
@@ -36,8 +36,8 @@ _C.data.dataset_root = 'dataset/3D-Deforming-FRONT-v5/'
 
 #resume
 #_C.snapshot = osp.join(_C.output_dir, 'snapshots/snapshot.pth.tar')
-#_C.snapshot = 'code/GeoTransformer-main/output_stage1/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-25.pth.tar'
-_C.snapshot = None
+_C.snapshot = 'code/GeoTransformer-main/output_stage1_96/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-25.pth.tar'
+#_C.snapshot = None
 # train data
 _C.train = edict()
 _C.train.batch_size = 1
@@ -74,7 +74,6 @@ _C.optim.lr = 4e-5
 _C.optim.lr_decay = 0.95
 _C.optim.lr_decay_steps = 1
 _C.optim.weight_decay = 1e-6
-_C.optim.max_epoch =50
 _C.optim.grad_acc_steps = 1
 _C.optim.reset_lr = False
 
@@ -102,7 +101,6 @@ _C.model.num_sinkhorn_iterations = 100
 _C.coarse_matching = edict()
 _C.coarse_matching.num_targets = 128
 _C.coarse_matching.overlap_threshold = 0.1
-_C.coarse_matching.num_correspondences = 128
 _C.coarse_matching.dual_normalization = True
 
 # model - GeoTransformer
@@ -116,6 +114,18 @@ _C.geotransformer.sigma_d = 0.2
 _C.geotransformer.sigma_a = 15
 _C.geotransformer.angle_k = 3
 _C.geotransformer.reduction_a = 'max'
+
+# model - GeoTransformer
+_C.maskformer = edict()
+_C.maskformer.input_dim = 1024
+_C.maskformer.hidden_dim = 256
+_C.maskformer.output_dim = 256
+_C.maskformer.num_heads = 4
+_C.maskformer.blocks = ['self', 'cross']
+_C.maskformer.sigma_d = 0.2
+_C.maskformer.sigma_a = 15
+_C.maskformer.angle_k = 3
+_C.maskformer.reduction_a = 'max'
 
 # model - Fine Matching
 _C.fine_matching = edict()
@@ -153,7 +163,9 @@ _C.loss.weight_corr_num_loss = 1.0
 _C.laplace = edict()
 _C.laplace.use = True
 _C.laplace.corr_mlp = False
-_C.laplace.stage = 1
+_C.laplace.stage = 2
+_C.coarse_matching.num_correspondences = 96
+_C.optim.max_epoch =70
 
 _C.laplace.corr_mlp_max = 128
 _C.laplace.corr_mlp_min = 64

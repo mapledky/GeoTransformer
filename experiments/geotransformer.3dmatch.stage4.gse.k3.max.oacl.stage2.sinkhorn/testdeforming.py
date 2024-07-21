@@ -20,13 +20,13 @@ import json
 import shutil
 
 """"
-python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir sp/low --weights code/GeoTransformer-main/assets/geotransformer-3dmatch.pth.tar
+python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir bp/low --weights code/GeoTransformer-main/output/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-40.pth.tar
 
-python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir bp/low --weights code/GeoTransformer-main/output_stage1/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-36.pth.tar --tune 1
+python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir bp/low --weights code/GeoTransformer-main/output_stage2_128/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-38.pth.tar --tune 1
 
-python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir pro40/low --way ransac --tune 1
+python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir bp/low --way ransac --tune 1
 
-python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir pro40/low --way ransac
+python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir sp/high --way ransac
 """
 
 
@@ -119,21 +119,52 @@ def compute_IR(src_corr_points, ref_corr_points, gt, acceptance_radius=0.1):
     src_corr_points_transformed = np.dot(src_corr_points, gt_np[:3, :3].T) + gt_np[:3, 3]
     corr_distances = np.linalg.norm(ref_corr_points - src_corr_points_transformed, axis=1)
     precision = np.mean(corr_distances < acceptance_radius)
-    
+
     return precision
 
-def ransac_test(data_dir, tune='0'):
+def registration_with_ransac_from_correspondences(
+    src_points,
+    ref_points,
+    correspondences=None,
+    distance_threshold=0.05,
+    ransac_n=3,
+    num_iterations=250,
+    ):
+    src_pcd = make_open3d_point_cloud(src_points)
+    ref_pcd = make_open3d_point_cloud(ref_points)
+    if correspondences is None:
+        indices = np.arange(src_points.shape[0])
+        correspondences = np.stack([indices, indices], axis=1)
+    correspondences = o3d.utility.Vector2iVector(correspondences)
+    result = o3d.pipelines.registration.registration_ransac_based_on_correspondence(
+        src_pcd,
+        ref_pcd,
+        correspondences,
+        distance_threshold,
+        estimation_method=o3d.pipelines.registration.TransformationEstimationPointToPoint(False),
+        ransac_n=ransac_n,
+        criteria=o3d.pipelines.registration.RANSACConvergenceCriteria(num_iterations, num_iterations),
+    )
+    return result.transformation, result.correspondence_set
+
+def ransac_test(data_dir, tune='0', sample=250):
     print(data_dir)
     cfg = make_cfg()
     subdirs = [os.path.join(dp, d) for dp, dn, filenames in os.walk(data_dir) for d in dn]    
     total_subdirs = len(subdirs)
-    if total_subdirs > 1000:
-        subdirs = subdirs[total_subdirs-10:]
+    if total_subdirs > 500:
+        subdirs = subdirs[total_subdirs-500:]
     total_subdirs = len(subdirs)
     rre_true = []
     rte_true = []
     rre_true_all = 0.
     rte_true_all = 0.
+
+    inlier_ratio_true = 0.
+    fmr_true = 0
+
+    inlier_ratio_wo_anim = 0.
+    fmr_wo_anim = 0
 
     num_pairs_true = 0
     num_pairs_true_pair = 0
@@ -153,11 +184,11 @@ def ransac_test(data_dir, tune='0'):
                 continue
             print(subdir_path)
             if tune == '1':
-                corr_true = os.path.join(subdir_path, 'corr_true_tune.npy')
-                corr_wo_anim = os.path.join(subdir_path, 'corr_wo_anim_tune.npy')
+                corr_true = os.path.join(subdir_path, 'corr_laplace.npy')
+                corr_wo_anim = os.path.join(subdir_path, 'corr_wo_anim_laplace.npy')
             else:
-                corr_true = os.path.join(subdir_path, 'corr_true.npy')
-                corr_wo_anim = os.path.join(subdir_path, 'corr_wo_anim.npy')
+                corr_true = os.path.join(subdir_path, 'corr_origin.npy')
+                corr_wo_anim = os.path.join(subdir_path, 'corr_wo_anim_origin.npy')
 
             src_true_file = os.path.join(subdir_path, 'src.npy')
             
@@ -169,12 +200,10 @@ def ransac_test(data_dir, tune='0'):
                 src_points = np.load(src_true_file)
                 gt_trans = np.load(gt_file)
 
-                estimated_transform = registration_with_ransac_from_correspondences(
+                estimated_transform, corr_set = registration_with_ransac_from_correspondences(
                     corr_true[: , :3],
                     corr_true[: , 3:6],
-                    distance_threshold=cfg.ransac.distance_threshold,
-                    ransac_n=cfg.ransac.num_points,
-                    num_iterations=cfg.ransac.num_iterations,
+                    num_iterations=sample
                 )
                 rre, rte = compute_registration_error(gt_trans, estimated_transform)
 
@@ -186,6 +215,14 @@ def ransac_test(data_dir, tune='0'):
                     num_pairs_true_pair += 1
                     rre_true.append(rre)
                     rte_true.append(rte)
+                corr_set = np.asarray(corr_set)
+                corr_true_src = corr_true[: , :3][corr_set[:, 0]]
+                corr_true_ref = corr_true[: , 3:6][corr_set[:, 1]]
+                inlier_ratio  = compute_IR(corr_true_src, corr_true_ref, gt_trans)
+                print('ir_true  ',inlier_ratio)
+                inlier_ratio_true += inlier_ratio
+                if inlier_ratio > 0.05:
+                    fmr_true += 1
                 num_pairs_true += 1
 
             if os.path.exists(src_true_file) and os.path.exists(corr_wo_anim) and os.path.exists(gt_file):
@@ -193,12 +230,10 @@ def ransac_test(data_dir, tune='0'):
                 src_points = np.load(src_true_file)
                 gt_trans = np.load(gt_file)
 
-                estimated_transform = registration_with_ransac_from_correspondences(
+                estimated_transform, corr_set = registration_with_ransac_from_correspondences(
                     corr_wo_anim[: , :3],
                     corr_wo_anim[: , 3:6],
-                    distance_threshold=cfg.ransac.distance_threshold,
-                    ransac_n=cfg.ransac.num_points,
-                    num_iterations=cfg.ransac.num_iterations,
+                    num_iterations=sample,
                 )
                 rre, rte = compute_registration_error(gt_trans, estimated_transform)
 
@@ -210,6 +245,14 @@ def ransac_test(data_dir, tune='0'):
                     num_pairs_wo_anim_pair += 1
                     rre_wo_anim.append(rre)
                     rte_wo_anim.append(rte)
+                corr_set = np.asarray(corr_set)
+                corr_true_src = corr_wo_anim[: , :3][corr_set[:, 0]]
+                corr_true_ref = corr_wo_anim[: , 3:6][corr_set[:, 1]]
+                inlier_ratio  = compute_IR(corr_true_src, corr_true_ref, gt_trans)
+                print('ir_wo_anim  ',inlier_ratio)
+                inlier_ratio_wo_anim += inlier_ratio
+                if inlier_ratio > 0.05:
+                    fmr_wo_anim += 1
                 num_pairs_wo_anim += 1
             pbar.update(1)
 
@@ -220,6 +263,10 @@ def ransac_test(data_dir, tune='0'):
         print(f"median RRE_true(deg): {median_rre:.3f}, median RTE_true(m): {median_rte:.3f}")
         print(f"RR_true: {rr:.3f}")
         print(f"avg RRE_true(deg): {rre_true_all / num_pairs_true:.3f}, avg RTE_true(m): {rte_true_all / num_pairs_true:.3f}")
+        ir = inlier_ratio_true / num_pairs_true
+        fmr = fmr_true /  num_pairs_true
+        print(f"IR_ture: {ir:.3f}")
+        print(f"FMR_true: {fmr:.3f}")
 
     if num_pairs_wo_anim != 0:
         rr = num_pairs_wo_anim_pair / num_pairs_wo_anim
@@ -228,6 +275,10 @@ def ransac_test(data_dir, tune='0'):
         print(f"median RRE_wo_anim(deg): {median_rre:.3f}, median RTE_wo_anim(m): {median_rte:.3f}")
         print(f"RR_wo_anim: {rr:.3f}")
         print(f"avg RRE_wo_anim(deg): {rre_wo_anim_all / num_pairs_wo_anim:.3f}, avg RTE_wo_anim(m): {rte_wo_anim_all / num_pairs_wo_anim:.3f}")
+        ir = inlier_ratio_wo_anim / num_pairs_wo_anim
+        fmr = fmr_wo_anim /  num_pairs_wo_anim
+        print(f"IR_wo_anim: {ir:.3f}")
+        print(f"FMR_wo_anim: {fmr:.3f}")
 
 
 def batch_test(data_dir, weights, tune=0, rec_corr=0):
@@ -274,8 +325,8 @@ def batch_test(data_dir, weights, tune=0, rec_corr=0):
     subdirs = [os.path.join(dp, d) for dp, dn, filenames in os.walk(data_dir) for d in dn]    
     total_subdirs = len(subdirs)
 
-    if total_subdirs > 500:
-        subdirs = subdirs[total_subdirs - 10:]
+    if total_subdirs >= 500:
+        subdirs = subdirs[total_subdirs - 20:]
     total_subdirs = len(subdirs)
 
     with tqdm(total=total_subdirs, desc='Processing subdirectories') as pbar:
@@ -307,9 +358,9 @@ def batch_test(data_dir, weights, tune=0, rec_corr=0):
                 rre, rte, estimate_rt,  corr = process_pair(model, data_dict_true, cfg)
 
                 if tune == "1":
-                    ouput_corr = os.path.join(subdir_path, 'corr_true_tune.npy')
+                    ouput_corr = os.path.join(subdir_path, 'corr_laplace.npy')
                 else:
-                    ouput_corr = os.path.join(subdir_path, 'corr_true.npy')
+                    ouput_corr = os.path.join(subdir_path, 'corr_origin.npy')
                 if rec_corr:
                     np.save(ouput_corr, corr)
                 rmse = compute_RMSE(data_dict_true.get('src_points'), data_dict_true.get('transform'), estimate_rt)
@@ -332,9 +383,9 @@ def batch_test(data_dir, weights, tune=0, rec_corr=0):
                 print(len(data_dict_true.get('src_points')) , len(data_dict_true.get('ref_points')))
                 rre, rte, estimate_rt,  corr = process_pair(model, data_dict_wo_anim, cfg)
                 if tune == "1":
-                    ouput_corr = os.path.join(subdir_path, 'corr_wo_anim_tune.npy')
+                    ouput_corr = os.path.join(subdir_path, 'corr_wo_anim_laplace.npy')
                 else:
-                    ouput_corr = os.path.join(subdir_path, 'corr_wo_anim.npy')
+                    ouput_corr = os.path.join(subdir_path, 'corr_wo_anim_origin.npy')
                 if rec_corr:
                     np.save(ouput_corr, corr)
                 rmse = compute_RMSE(data_dict_wo_anim.get('src_points'),  data_dict_wo_anim.get('transform'), estimate_rt)
@@ -383,7 +434,7 @@ def batch_test(data_dir, weights, tune=0, rec_corr=0):
 def main():
     parser = make_parser()
     args = parser.parse_args()
-    dataset = os.path.join('dataset/3D-Deforming-FRONT-v5/rawdata', args.data_dir)
+    dataset = os.path.join('dataset/3D-Deforming-FRONT-v5/test', args.data_dir)
     if args.way == 'lgr':
         batch_test(dataset, args.weights, tune=args.tune)
     else:
