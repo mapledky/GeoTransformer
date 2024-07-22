@@ -7,17 +7,13 @@ import numpy as np
 
 
 class SuperPointMatching(nn.Module):
-    def __init__(self, num_correspondences, dual_normalization=True, corr_mlp=False, hidden_n=64, mlp_max=128, mlp_min=32):
+    def __init__(self, num_correspondences, dual_normalization=True):
         super(SuperPointMatching, self).__init__()
         self.num_correspondences = num_correspondences
         self.dual_normalization = dual_normalization
-        self.corr_mlp = corr_mlp
-        self.mlp_max = mlp_max
-        self.mlp_min = mlp_min
-        if corr_mlp:
-            self.corr_mlp_module = CorrMlp(1, hidden_n)
 
-    def forward(self, ref_feats, src_feats, ref_masks=None, src_masks=None, laplace_mask=None):
+
+    def forward(self, ref_feats, src_feats, ref_masks=None, src_masks=None):
         r"""Extract superpoint correspondences.
 
         Args:
@@ -44,28 +40,14 @@ class SuperPointMatching(nn.Module):
         src_feats = src_feats[src_indices]
         # select top-k proposals
         matching_scores = torch.exp(-pairwise_distance(ref_feats, src_feats, normalized=True))
-        #print('matching_score ', matching_scores.shape)
-        
-        if not (laplace_mask is None):
-            laplace_mask = torch.squeeze(laplace_mask)
-            laplace_mask_src = laplace_mask[:n]
-            laplace_mask_ref = laplace_mask[n:n+m]
-            laplace_mask_ref = laplace_mask_ref[ref_indices].unsqueeze(-1)
-            laplace_mask_src = laplace_mask_src[src_indices]
-            # print('laplace_mask ', laplace_mask.shape)
-            matching_scores =laplace_mask_ref * matching_scores * laplace_mask_src
+
         if self.dual_normalization:
             ref_matching_scores = matching_scores / matching_scores.sum(dim=1, keepdim=True)
             src_matching_scores = matching_scores / matching_scores.sum(dim=0, keepdim=True)
             matching_scores = ref_matching_scores * src_matching_scores
         # print('matching ',np.sum(np.array(matching_scores.cpu().detach()) > 0))
-        if self.corr_mlp:
-            corr_num_mlp = self.corr_mlp_module(matching_scores.detach())
-            corr_num_mlp = corr_num_mlp * self.mlp_max
-            num_correspondences = max(self.mlp_min, int(min(corr_num_mlp, matching_scores.numel()).item()))
-        else:
-            corr_num_mlp = None
-            num_correspondences = min(self.num_correspondences, matching_scores.numel())
+
+        num_correspondences = min(self.num_correspondences, matching_scores.numel())
         corr_scores, corr_indices = matching_scores.view(-1).topk(k=num_correspondences, largest=True)
         ref_sel_indices = corr_indices // matching_scores.shape[1]
         src_sel_indices = corr_indices % matching_scores.shape[1]
@@ -73,4 +55,4 @@ class SuperPointMatching(nn.Module):
         ref_corr_indices = ref_indices[ref_sel_indices]
         src_corr_indices = src_indices[src_sel_indices]
 
-        return ref_corr_indices, src_corr_indices, corr_scores, corr_num_mlp
+        return ref_corr_indices, src_corr_indices, corr_scores

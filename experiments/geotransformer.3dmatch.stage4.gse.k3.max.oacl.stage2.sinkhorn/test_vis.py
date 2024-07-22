@@ -160,6 +160,24 @@ def savePC(pcd_np, super_pcd, output_path,src = True):
     o3d.io.write_point_cloud(output_path, point_cloud)
     return point_cloud
 
+def savePCwiMask(pcd_np, super_pcd, mask, output_path):
+    with open(output_path, 'w') as file:
+        pass  # 创建空文件
+    point_cloud = o3d.geometry.PointCloud()
+    point_cloud.points = o3d.utility.Vector3dVector(pcd_np)
+    point_cloud.paint_uniform_color([169/255, 184/255, 198/255])  # gray
+
+    color_low = np.array([47/255, 127/255, 193/255]) #blue
+    color_high = np.array([216/255, 56/255, 58/255]) #red
+    colors = np.outer(mask, color_high - color_low) + color_low
+    super_point_cloud = o3d.geometry.PointCloud()
+    super_point_cloud.points = o3d.utility.Vector3dVector(super_pcd)
+    super_point_cloud.colors = o3d.utility.Vector3dVector(colors)
+
+    point_cloud = point_cloud + super_point_cloud
+    o3d.io.write_point_cloud(output_path, point_cloud)
+    return point_cloud
+
 def combinePC(point_cloud_src, point_cloud_ref, gt, output_path='combine.pcd'):    
     with open(output_path, 'w') as file:
         pass  # 创建空文件

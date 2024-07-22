@@ -39,15 +39,18 @@ def make_parser():
     return parser
 
 
-def load_data(src_file, ref_file, gt_file, src_back_indices=[]):
+def load_data(src_file, ref_file, gt_file, src_back_indices=[], ref_back_indices=[]):
     src_points = np.load(src_file)  # n,3
+    ref_points = np.load(ref_file)
     if len(src_back_indices) == 0:
         src_back_indices = np.arange(0, len(src_points))
+    if len(ref_back_indices) == 0:
+        ref_back_indices = np.arange(0, len(ref_points))
     if len(src_points) > 20000:
         src_points, src_back_indices = point_cut(src_points, src_back_indices)
-    ref_points = np.load(ref_file)
+    
     if len(ref_points) > 20000:
-        ref_points, _ = point_cut(ref_points, [])
+        ref_points, ref_back_indices = point_cut(ref_points, ref_back_indices)
 
     src_feats = np.ones_like(src_points[:, :1])
     ref_feats = np.ones_like(ref_points[:, :1])
@@ -57,7 +60,8 @@ def load_data(src_file, ref_file, gt_file, src_back_indices=[]):
         "src_points": src_points.astype(np.float32),
         "ref_feats": ref_feats.astype(np.float32),
         "src_feats": src_feats.astype(np.float32),
-        "src_back_indices": src_back_indices
+        "src_back_indices": src_back_indices,
+        "ref_back_indices": ref_back_indices
     }
 
     if gt_file is not None:
@@ -348,12 +352,16 @@ def batch_test(data_dir, weights, tune=0, rec_corr=0):
             with open(src_back_indices_json , 'r') as file:
                 data = json.load(file)
                 src_back_indices = np.array(data['back_indices'])
+            ref_back_indices_json = os.path.join(subdir_path, 'ref_back_indices.json')
+            with open(ref_back_indices_json , 'r') as file:
+                data = json.load(file)
+                ref_back_indices = np.array(data['back_indices'])
 
             data_dict_true = None
             data_dict_wo_anim = None
 
             if os.path.exists(src_true_file) and os.path.exists(ref_true_file) and os.path.exists(gt_file):
-                data_dict_true = load_data(src_true_file, ref_true_file, gt_file, src_back_indices)
+                data_dict_true = load_data(src_true_file, ref_true_file, gt_file, src_back_indices, ref_back_indices)
                 print(len(data_dict_true.get('src_points')) , len(data_dict_true.get('ref_points')))
                 rre, rte, estimate_rt,  corr = process_pair(model, data_dict_true, cfg)
 
