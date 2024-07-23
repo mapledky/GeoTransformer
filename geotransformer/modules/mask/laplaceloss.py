@@ -50,7 +50,7 @@ class NLLLaplace:
 
         loss1 = (loss_row.mean() + loss_col.mean()) / 2
         loss2 = 1 * torch.abs(var_mask - gt_mask).mean()
-        print(loss1, loss2)
+        #print(loss1, loss2)
         loss = loss1 + loss2
         return loss, loss1, loss2
 
@@ -124,7 +124,6 @@ class LaplaceLoss(nn.Module):
             corr_sp_mask = torch.ones(corr_gt.shape[0] + corr_gt.shape[1], device=device)
         else:
             corr_sp_mask = output_dict['corr_sp_mask'].to(device) #B,1,n+m
-        loss = self.loss(output_dict, corr_gt, 1 - corr_sp_mask, gt_mask)
-
+        loss = self.loss(output_dict, corr_gt, 1 - corr_sp_mask, 1 - gt_mask)
         return loss
 
