@@ -12,48 +12,26 @@ class NLLLaplace:
         super().__init__()
         self.ratio = ratio
 
-    def __call__(self, corr_gt, corr_es, log_var_mask, mask=None):
-        # print('corr_gt_shape',corr_gt.shape)
-        # print('corr_es_shape',corr_es.shape)
-        # print('corr_loss', torch.abs(corr_gt - corr_es).mean())
-        # print('log_var_mask_shape',log_var_mask.shape)
-        b, _, n, m = corr_gt.shape
+    def __call__(self, corr_gt, corr_es, log_var_mask, gt_mask):
+        m, n = corr_gt.shape
         indices = np.sum(np.array(corr_es.cpu().detach()) > 0)
         indices_back = np.sum(np.array(corr_gt.cpu().detach()) > 0)
         indices = max(indices, 1)
-        #print("back-indi", indices_back)
         indice_ratio = 1. /  (indices / (n * m))
 
-        not_equal_mask = corr_gt != corr_es
-        # 统计不相等元素的数量
-        not_equal_count = torch.sum(not_equal_mask)
-        src_mask = log_var_mask[:, :, :n]
-        ref_mask = log_var_mask[:, :, n:n+m]
-        laplace_mask = (src_mask.transpose(1, 2) @ ref_mask).reshape(b, 1, n, m)
-        #print('count', not_equal_count)
+        ref_mask = log_var_mask[:m]
+        src_mask = log_var_mask[m:n+m]
+        laplace_mask = torch.ger(ref_mask, src_mask)
         # loss1 = math.sqrt(2) * indice_ratio * torch.exp(-0.5 * src_mask).unsqueeze(-1) * \
         #     torch.abs(corr_gt - corr_es) * torch.exp(-0.5 * ref_mask)
         loss1 = math.sqrt(2) * indice_ratio * torch.exp(-0.5 * laplace_mask) * \
              torch.abs(corr_gt - corr_es)
+        loss1 = loss1.mean()
         # each dimension is multiplied
-        loss2 = 0.5 * laplace_mask
-        # print('loss1', loss1.mean())
-        # print('loss2', loss2.mean())
+        loss2 = 1 * torch.abs(log_var_mask - gt_mask).mean()
+        print(loss1, loss2)
         loss = loss1 + loss2
-        if mask is not None:
-            mask = ~torch.isnan(loss.detach()) & ~torch.isinf(
-                loss.detach()) & mask
-        else:
-            mask = ~torch.isnan(loss.detach()) & ~torch.isinf(loss.detach())
-
-        # if torch.isnan(loss.detach()).sum().ge(1) or torch.isinf(
-        #         loss.detach()).sum().ge(1):
-        #     print('mask or inf in the loss ! ')
-        if mask is not None:
-            loss = torch.masked_select(loss, mask).mean()
-        else:
-            loss = loss.mean()
-        return loss, loss1.mean(), loss2.mean()
+        return loss, loss1, loss2
 
 
  
@@ -79,14 +57,12 @@ def get_correspondences(ref_points, src_points, transform, matching_radius):
     return corr_indices
 
 class LaplaceLoss(nn.Module):
-    def __init__(self, matching_radius=0.1,max_points=256, stage=1, corr_mlp=False, corr_mlp_min=64):
+    def __init__(self, matching_radius=0.1,max_points=256, stage=1):
         super(LaplaceLoss, self).__init__()
         self.loss = NLLLaplace()
         self.matching_radius = matching_radius
         self.stage = stage
         self.max_points = max_points
-        self.corr_mlp = corr_mlp
-        self.corr_mlp_min = corr_mlp_min
         
     def forward(self, output_dict, data_dict):
         device = output_dict['src_points'].device
@@ -95,54 +71,51 @@ class LaplaceLoss(nn.Module):
         indices_ref = get_indices_from_loc(output_dict['ref_points'], output_dict['ref_points_c'] ).to(device)#(M)
         # print('indices_src',indices_src.shape)
         # print('indices_ref',indices_ref.shape)
-        
+        m = len(indices_ref)
+        n = len(indices_src)
         src_node_corr_indices = output_dict['src_node_corr_indices'].to(device)#(n1)
         ref_node_corr_indices = output_dict['ref_node_corr_indices'].to(device)#（m1）
         
-        corr_es = torch.zeros((len(indices_src), len(indices_ref)), device=device)#（N,M）
-        for x, y in zip(src_node_corr_indices, ref_node_corr_indices):
+        corr_es = torch.zeros((m, n), device=device)
+        for x, y in zip(ref_node_corr_indices, src_node_corr_indices):
             corr_es[x, y] = 1
         # print('src_node_corr_indices',src_node_corr_indices.shape)
 
         gt_transform = data_dict['transform'].to(device)#(4 * 4)
         src_back_indices = data_dict['src_back_indices'].to(device)#(M)
+        ref_back_indices = data_dict['ref_back_indices'].to(device)#(M)
         set_src_indices = set(indices_src.tolist())
         set_src_back_indices = set(src_back_indices.tolist())
 
-        intersection = set_src_indices.intersection(set_src_back_indices)
-        intersection = torch.tensor(list(intersection), device=device)#src sp in background (N1)
-        intersection_indices = torch.nonzero(indices_src.unsqueeze(1) == intersection, as_tuple=True)[0]
-        # print('intersection_indices',intersection_indices.shape)
+        set_ref_indices = set(indices_ref.tolist())
+        set_ref_back_indices = set(ref_back_indices.tolist())
 
-        # corr_gt = torch.zeros_like(corr_es)
-        # corr_gt[intersection_indices, :] = corr_es[intersection_indices, :]
+        intersection_src = set_src_indices.intersection(set_src_back_indices)
+        intersection_src = torch.tensor(list(intersection_src), device=device)#src sp in background (N1)
+        intersection_indices_src = torch.nonzero(indices_src.unsqueeze(1) == intersection_src, as_tuple=True)[0]
 
-        src_points_c = output_dict['src_points_c'].to(device)
-        ref_points_c = output_dict['ref_points_c'].to(device)
-        # corr_gt_indices = get_correspondences(ref_points_c, src_points_c, gt_transform, matching_radius=self.matching_radius)
-        # # print('corr_gt_indices',corr_gt_indices.shape)
-        # corr_gt = torch.zeros((len(indices_src), len(indices_ref)), device=device)
-        # for x, y in corr_gt_indices:
-        #     corr_gt[y, x] = 1
-        # mask = torch.zeros(corr_gt.size(0), dtype=torch.bool)
-        # mask[intersection_indices] = True
-        # corr_gt[~mask] = 0
+        intersection_ref = set_ref_indices.intersection(set_ref_back_indices)
+        intersection_ref = torch.tensor(list(intersection_ref), device=device)#src sp in background (N1)
+        intersection_indices_ref = torch.nonzero(indices_ref.unsqueeze(1) == intersection_ref, as_tuple=True)[0]
 
         corr_gt_indices = output_dict['gt_node_corr_indices'].to(device)
         corr_gt_overlap = output_dict['gt_node_corr_overlaps'].to(device)
-        corr_gt = torch.zeros((len(indices_src), len(indices_ref)), device=device)
-        corr_overlap = torch.zeros((len(indices_src), len(indices_ref)), device=device)
+        corr_gt = torch.zeros((m, n), device=device)
+        corr_overlap = torch.zeros((m, n), device=device)
         for idx, (x, y) in enumerate(corr_gt_indices):
-            corr_gt[y, x] = 1
-            corr_overlap[y, x] = corr_gt_overlap[idx]
-        mask = torch.zeros(corr_gt.size(0), dtype=torch.bool)
-        mask[intersection_indices] = True
+            corr_gt[x, y] = 1
+            corr_overlap[x, y] = corr_gt_overlap[idx]
+        mask_ref = torch.zeros(corr_gt.size(0), dtype=torch.bool)
+        mask_ref[intersection_indices_ref] = True
+
+        mask_src = torch.zeros(corr_gt.size(1), dtype=torch.bool)
+        mask_src[intersection_indices_src] = True
+        mask = mask_ref.unsqueeze(1) & mask_src
         corr_gt[~mask] = 0
 
+        gt_mask = torch.cat((mask_ref, mask_src),dim=0).float().to(device)
         indices_back = np.sum(np.array(corr_gt.cpu().detach()) > 0)
-        if self.corr_mlp:
-            corr_num_mlp = output_dict['corr_num_mlp'].to(device)
-            self.max_points = max(int(corr_num_mlp.item()), self.corr_mlp_min)
+
         if indices_back > self.max_points:
             ones_indices = torch.nonzero(corr_gt, as_tuple=False)
             scores = corr_overlap[ones_indices[:, 0], ones_indices[:, 1]]
@@ -154,16 +127,9 @@ class LaplaceLoss(nn.Module):
             corr_gt = new_corr_gt
 
         if self.stage == 1:
-            corr_sp_mask = torch.ones(corr_gt.shape[0] + corr_gt.shape[1], device=device).unsqueeze(0).unsqueeze(0)
+            corr_sp_mask = torch.ones(corr_gt.shape[0] + corr_gt.shape[1], device=device)
         else:
             corr_sp_mask = output_dict['corr_sp_mask'].to(device) #B,1,n+m
-        loss = self.loss(corr_gt.unsqueeze(0).unsqueeze(0), corr_es.unsqueeze(0).unsqueeze(0), (1 - corr_sp_mask))
-
-        gt_corr_num = (corr_gt > 0).sum()
-        if self.corr_mlp:
-            loss_corr_num = torch.abs(corr_num_mlp - gt_corr_num.detach()) / corr_num_mlp
-            loss_min = torch.relu(self.corr_mlp_min - corr_num_mlp)
-            loss_corr_num += loss_min
-            return loss, loss_corr_num
-        return loss, torch.tensor(0., device=device)
+        loss = self.loss(corr_gt, corr_es, (1 - corr_sp_mask), 1-gt_mask)
+        return loss
 

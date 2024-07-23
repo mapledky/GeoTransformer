@@ -16,7 +16,7 @@ _C.seed = 7351
 _C.working_dir = osp.dirname(osp.realpath(__file__))
 _C.root_dir = osp.dirname(osp.dirname(_C.working_dir))
 _C.exp_name = osp.basename(_C.working_dir)
-_C.output_dir = osp.join(_C.root_dir, 'output_stage2_96_cross', _C.exp_name)
+_C.output_dir = osp.join(_C.root_dir, 'output_stage1_64_cross_ref', _C.exp_name)
 _C.snapshot_dir = osp.join(_C.output_dir, 'snapshots')
 _C.log_dir = osp.join(_C.output_dir, 'logs')
 _C.event_dir = osp.join(_C.output_dir, 'events')
@@ -36,8 +36,8 @@ _C.data.dataset_root = 'dataset/3D-Deforming-FRONT-v5/'
 
 #resume
 #_C.snapshot = osp.join(_C.output_dir, 'snapshots/snapshot.pth.tar')
-_C.snapshot = 'code/GeoTransformer-main/output_stage1_96/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-25.pth.tar'
-#_C.snapshot = None
+#_C.snapshot = 'code/GeoTransformer-main/output_stage1_96/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-25.pth.tar'
+_C.snapshot = None
 # train data
 _C.train = edict()
 _C.train.batch_size = 1
@@ -162,14 +162,11 @@ _C.loss.weight_corr_num_loss = 1.0
 # laplace
 _C.laplace = edict()
 _C.laplace.use = True
-_C.laplace.corr_mlp = False
-_C.laplace.stage = 2
-_C.coarse_matching.num_correspondences = 96
-_C.optim.max_epoch =70
 
-_C.laplace.corr_mlp_max = 128
-_C.laplace.corr_mlp_min = 64
-_C.laplace.corr_mlp_hidden = 64
+_C.laplace.stage = 1
+_C.coarse_matching.num_correspondences = 64
+_C.optim.max_epoch =50
+
 
 def make_cfg():
     return _C

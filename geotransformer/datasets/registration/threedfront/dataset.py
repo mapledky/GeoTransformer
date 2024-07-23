@@ -117,14 +117,19 @@ class ThreeDFrontPairDataset(torch.utils.data.Dataset):
         ref_points = np.load(osp.join(scene_path, 'ref.npy'))
         src_points = np.load(osp.join(scene_path, 'src.npy'))
         src_back_indices_json = os.path.join(scene_path, 'src_back_indices.json')
+        ref_back_indices_json = os.path.join(scene_path, 'ref_back_indices.json')
         with open(src_back_indices_json , 'r') as file:
             data = json.load(file)
             src_back_indices = np.array(data['back_indices'])
 
+        with open(ref_back_indices_json , 'r') as file:
+            data = json.load(file)
+            ref_back_indices = np.array(data['back_indices'])
+
         if len(src_points) > self.point_limit:
             src_points, src_back_indices = self.point_cut(src_points,src_back_indices, self.point_limit)
         if len(ref_points) > self.point_limit:
-            ref_points, _ = self.point_cut(ref_points,[], self.point_limit)
+            ref_points, ref_back_indices = self.point_cut(ref_points,ref_back_indices, self.point_limit)
         transform = np.load(osp.join(scene_path, 'relative_transform.npy'))
 
         rotation = transform[:3, :3]
@@ -154,6 +159,7 @@ class ThreeDFrontPairDataset(torch.utils.data.Dataset):
         data_dict['ref_points'] = ref_points.astype(np.float32)
         data_dict['src_points'] = src_points.astype(np.float32)
         data_dict['src_back_indices'] = src_back_indices
+        data_dict['ref_back_indices'] = ref_back_indices
         data_dict['ref_feats'] = np.ones((ref_points.shape[0], 1), dtype=np.float32)
         data_dict['src_feats'] = np.ones((src_points.shape[0], 1), dtype=np.float32)
         data_dict['transform'] = transform.astype(np.float32)

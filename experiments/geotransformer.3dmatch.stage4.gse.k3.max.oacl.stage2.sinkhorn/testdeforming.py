@@ -22,7 +22,7 @@ import shutil
 """"
 python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir bp/low --weights code/GeoTransformer-main/output/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-40.pth.tar
 
-python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir bp/low --weights code/GeoTransformer-main/output_stage2_128/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-38.pth.tar --tune 1
+python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir sp/low --weights code/GeoTransformer-main/output_stage1_64/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-25.pth.tar --tune 1
 
 python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir bp/low --way ransac --tune 1
 
@@ -39,15 +39,18 @@ def make_parser():
     return parser
 
 
-def load_data(src_file, ref_file, gt_file, src_back_indices=[]):
+def load_data(src_file, ref_file, gt_file, src_back_indices=[], ref_back_indices=[]):
     src_points = np.load(src_file)  # n,3
+    ref_points = np.load(ref_file)
     if len(src_back_indices) == 0:
         src_back_indices = np.arange(0, len(src_points))
+    if len(ref_back_indices) == 0:
+        ref_back_indices = np.arange(0, len(ref_points))
     if len(src_points) > 20000:
         src_points, src_back_indices = point_cut(src_points, src_back_indices)
-    ref_points = np.load(ref_file)
+    
     if len(ref_points) > 20000:
-        ref_points, _ = point_cut(ref_points, [])
+        ref_points, ref_back_indices = point_cut(ref_points, ref_back_indices)
 
     src_feats = np.ones_like(src_points[:, :1])
     ref_feats = np.ones_like(ref_points[:, :1])
@@ -57,7 +60,8 @@ def load_data(src_file, ref_file, gt_file, src_back_indices=[]):
         "src_points": src_points.astype(np.float32),
         "ref_feats": ref_feats.astype(np.float32),
         "src_feats": src_feats.astype(np.float32),
-        "src_back_indices": src_back_indices
+        "src_back_indices": src_back_indices,
+        "ref_back_indices": ref_back_indices
     }
 
     if gt_file is not None:
@@ -345,10 +349,13 @@ def batch_test(data_dir, weights, tune=0, rec_corr=0):
             gt_file = os.path.join(subdir_path, 'relative_transform.npy')
 
             src_back_indices_json = os.path.join(subdir_path, 'src_back_indices.json')
+            ref_back_indices_json = os.path.join(subdir_path, 'ref_back_indices.json')
             with open(src_back_indices_json , 'r') as file:
                 data = json.load(file)
                 src_back_indices = np.array(data['back_indices'])
-
+            with open(ref_back_indices_json , 'r') as file:
+                data = json.load(file)
+                ref_back_indices = np.array(data['back_indices'])
             data_dict_true = None
             data_dict_wo_anim = None
 

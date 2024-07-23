@@ -69,7 +69,7 @@ class LaplaceMask(nn.Module):
         )
         
         #(B,N+M,attn_ouput)
-        x = torch.cat((src_f, ref_f), dim=1)
+        x = torch.cat((ref_f, src_f), dim=1)
         x = self.linear_1(x)
         x = self.relu(x)
         x = self.linear_2(x)
