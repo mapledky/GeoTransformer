@@ -16,7 +16,7 @@ _C.seed = 7351
 _C.working_dir = osp.dirname(osp.realpath(__file__))
 _C.root_dir = osp.dirname(osp.dirname(_C.working_dir))
 _C.exp_name = osp.basename(_C.working_dir)
-_C.output_dir = osp.join(_C.root_dir, 'output_stage1_64_cross_ref', _C.exp_name)
+_C.output_dir = osp.join(_C.root_dir, 'output_stage1_48_cross_ref', _C.exp_name)
 _C.snapshot_dir = osp.join(_C.output_dir, 'snapshots')
 _C.log_dir = osp.join(_C.output_dir, 'logs')
 _C.event_dir = osp.join(_C.output_dir, 'events')
@@ -164,7 +164,7 @@ _C.laplace = edict()
 _C.laplace.use = True
 
 _C.laplace.stage = 1
-_C.coarse_matching.num_correspondences = 64
+_C.coarse_matching.num_correspondences = 48
 _C.optim.max_epoch =50
 
 

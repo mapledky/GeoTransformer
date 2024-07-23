@@ -28,8 +28,7 @@ class NLLLaplace:
              torch.abs(corr_gt - corr_es)
         loss1 = loss1.mean()
         # each dimension is multiplied
-        loss2 = 1 * torch.abs(log_var_mask - gt_mask).mean()
-        print(loss1, loss2)
+        loss2 = 1. * torch.abs(log_var_mask - gt_mask).mean()
         loss = loss1 + loss2
         return loss, loss1, loss2
 
@@ -128,8 +127,9 @@ class LaplaceLoss(nn.Module):
 
         if self.stage == 1:
             corr_sp_mask = torch.ones(corr_gt.shape[0] + corr_gt.shape[1], device=device)
+            loss = self.loss(corr_gt, corr_es, (1 - corr_sp_mask), 1-corr_sp_mask)
         else:
             corr_sp_mask = output_dict['corr_sp_mask'].to(device) #B,1,n+m
-        loss = self.loss(corr_gt, corr_es, (1 - corr_sp_mask), 1-gt_mask)
+            loss = self.loss(corr_gt, corr_es, (1 - corr_sp_mask), 1-gt_mask)
         return loss
 
