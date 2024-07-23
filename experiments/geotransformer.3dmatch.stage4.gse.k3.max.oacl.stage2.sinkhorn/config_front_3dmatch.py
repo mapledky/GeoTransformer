@@ -16,7 +16,7 @@ _C.seed = 7351
 _C.working_dir = osp.dirname(osp.realpath(__file__))
 _C.root_dir = osp.dirname(osp.dirname(_C.working_dir))
 _C.exp_name = osp.basename(_C.working_dir)
-_C.output_dir = osp.join(_C.root_dir, 'output_stage2_48_circle', _C.exp_name)
+_C.output_dir = osp.join(_C.root_dir, 'output_stage3_3dmatch', _C.exp_name)
 _C.snapshot_dir = osp.join(_C.output_dir, 'snapshots')
 _C.log_dir = osp.join(_C.output_dir, 'logs')
 _C.event_dir = osp.join(_C.output_dir, 'events')
@@ -32,7 +32,7 @@ ensure_dir(_C.registration_dir)
 
 # data
 _C.data = edict()
-_C.data.dataset_root = 'dataset/3D-Deforming-FRONT-v5/'
+_C.data.dataset_root = 'dataset/3dmatch/'
 
 #resume
 #_C.snapshot = osp.join(_C.output_dir, 'snapshots/snapshot.pth.tar')
@@ -70,7 +70,7 @@ _C.ransac.num_iterations = 1000
 
 # optim
 _C.optim = edict()
-_C.optim.lr = 4e-5
+_C.optim.lr = 2e-5
 _C.optim.lr_decay = 0.95
 _C.optim.lr_decay_steps = 1
 _C.optim.weight_decay = 1e-6
@@ -160,7 +160,7 @@ _C.loss.weight_laplace_loss = 1.5
 
 # laplace
 _C.laplace = edict()
-_C.laplace.use = True
+_C.laplace.use = False
 _C.laplace.stage = 2
 
 _C.laplace.pos_margin = 0.1

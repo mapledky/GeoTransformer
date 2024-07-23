@@ -17,7 +17,7 @@ class NLLLaplace:
         self.neg_margin = cfg.laplace.neg_margin
         self.log_scale = cfg.laplace.log_scale
 
-    def __call__(self, output_dict, gt_map, var_mask):
+    def __call__(self, output_dict, gt_map, var_mask, gt_mask):
         ref_feats = output_dict['ref_feats_c']
         m = ref_feats.shape[0]
         src_feats = output_dict['src_feats_c']
@@ -49,8 +49,8 @@ class NLLLaplace:
         loss_col = F.softplus(loss_pos_col + loss_neg_col) / self.log_scale
 
         loss1 = (loss_row.mean() + loss_col.mean()) / 2
-        loss2 = 0.5 * laplace_mask.mean()
-
+        loss2 = 1 * torch.abs(var_mask - gt_mask).mean()
+        print(loss1, loss2)
         loss = loss1 + loss2
         return loss, loss1, loss2
 
@@ -108,6 +108,7 @@ class LaplaceLoss(nn.Module):
         mask = mask_ref.unsqueeze(1) & mask_src
         corr_gt[~mask] = False
 
+        gt_mask = torch.cat((mask_ref, mask_src),dim=0).float().to(device)
         indices_back = np.sum(np.array(corr_gt.cpu().detach()) > 0)
         if indices_back > self.max_points:
             ones_indices = torch.nonzero(corr_gt, as_tuple=False)
@@ -123,7 +124,7 @@ class LaplaceLoss(nn.Module):
             corr_sp_mask = torch.ones(corr_gt.shape[0] + corr_gt.shape[1], device=device)
         else:
             corr_sp_mask = output_dict['corr_sp_mask'].to(device) #B,1,n+m
-        loss = self.loss(output_dict, corr_gt, 1 - corr_sp_mask)
+        loss = self.loss(output_dict, corr_gt, 1 - corr_sp_mask, gt_mask)
 
         return loss
 
