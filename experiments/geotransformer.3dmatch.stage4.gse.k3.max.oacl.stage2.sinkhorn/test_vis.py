@@ -20,11 +20,12 @@ from tqdm import tqdm
 import open3d as o3d
 import json
 import shutil
+from scipy.spatial import KDTree
 
 """"
 python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/test_vis.py --data_dir sp/low --weights code/GeoTransformer-main/assets/geotransformer-3dmatch.pth.tar
 
-python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/test_vis.py --data_dir sp/low --weights code/GeoTransformer-main/output/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-29.pth.tar
+python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/test_vis.py --data_dir sp/low --weights code/GeoTransformer-main/output_stage2_48_cicle/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-39.pth.tar
 """
 
 
@@ -36,15 +37,18 @@ def make_parser():
     return parser
 
 
-def load_data(src_file, ref_file, gt_file, src_back_indices=[]):
+def load_data(src_file, ref_file, gt_file, src_back_indices=[], ref_back_indices=[]):
     src_points = np.load(src_file)  # n,3
+    ref_points = np.load(ref_file)
     if len(src_back_indices) == 0:
         src_back_indices = np.arange(0, len(src_points))
+    if len(ref_back_indices) == 0:
+        ref_back_indices = np.arange(0, len(ref_points))
     if len(src_points) > 20000:
         src_points, src_back_indices = point_cut(src_points, src_back_indices)
-    ref_points = np.load(ref_file)
+    
     if len(ref_points) > 20000:
-        ref_points, _ = point_cut(ref_points, [])
+        ref_points, ref_back_indices = point_cut(ref_points, ref_back_indices)
 
     src_feats = np.ones_like(src_points[:, :1])
     ref_feats = np.ones_like(ref_points[:, :1])
@@ -54,7 +58,8 @@ def load_data(src_file, ref_file, gt_file, src_back_indices=[]):
         "src_points": src_points.astype(np.float32),
         "ref_feats": ref_feats.astype(np.float32),
         "src_feats": src_feats.astype(np.float32),
-        "src_back_indices": src_back_indices
+        "src_back_indices": src_back_indices,
+        "ref_back_indices": ref_back_indices
     }
 
     if gt_file is not None:
@@ -96,9 +101,9 @@ def process_pair(model, data_dict, cfg):
     # get results
     estimated_transform = output_dict["estimated_transform"]
     transform = data_dict["transform"]
-    # compute error
+
     rre, rte = compute_registration_error(transform, estimated_transform)
-    return rre, rte, estimated_transform, corr
+    return rre, rte, estimated_transform, corr, output_dict
 
 def show_corr(src_points, ref_points, corr, save_file):
     # 保存文件路径
@@ -160,20 +165,34 @@ def savePC(pcd_np, super_pcd, output_path,src = True):
     o3d.io.write_point_cloud(output_path, point_cloud)
     return point_cloud
 
-def savePCwiMask(pcd_np, super_pcd, mask, output_path):
+def savePCwiMask(pcd_np, super_pcd, mask, output_path, knnd=0.1):
     with open(output_path, 'w') as file:
         pass  # 创建空文件
     point_cloud = o3d.geometry.PointCloud()
     point_cloud.points = o3d.utility.Vector3dVector(pcd_np)
     point_cloud.paint_uniform_color([169/255, 184/255, 198/255])  # gray
 
+    color_gray = np.array([169/255, 184/255, 198/255])
     color_low = np.array([47/255, 127/255, 193/255]) #blue
     color_high = np.array([216/255, 56/255, 58/255]) #red
-    colors = np.outer(mask, color_high - color_low) + color_low
+    super_colors = np.outer(mask, color_high - color_low) + color_low
     super_point_cloud = o3d.geometry.PointCloud()
     super_point_cloud.points = o3d.utility.Vector3dVector(super_pcd)
-    super_point_cloud.colors = o3d.utility.Vector3dVector(colors)
+    super_point_cloud.colors = o3d.utility.Vector3dVector(super_colors)
 
+    kdtree = KDTree(super_pcd)
+    distances, indices = kdtree.query(pcd_np, k=1)
+
+    colors = []
+    for i, dist in enumerate(distances):
+        if dist < knnd:
+            weight = 1 - dist / knnd
+            super_color = super_colors[indices[i]]
+            color = weight * super_color + (1 - weight) * color_gray
+        else:
+            color = color_gray
+        colors.append(color)
+    point_cloud.colors = o3d.utility.Vector3dVector(colors)
     point_cloud = point_cloud + super_point_cloud
     o3d.io.write_point_cloud(output_path, point_cloud)
     return point_cloud
@@ -228,8 +247,8 @@ def batch_test(data_dir, weights, corr_record=False):
     subdirs = [os.path.join(data_dir, d) for d in os.listdir(data_dir) if os.path.isdir(os.path.join(data_dir, d))] 
     total_subdirs = len(subdirs)
 
-    if total_subdirs > 20:
-        subdirs = subdirs[:20]
+    if total_subdirs > 30:
+        subdirs = subdirs[:30]
     total_subdirs = len(subdirs)
 
     with tqdm(total=total_subdirs, desc='Processing subdirectories') as pbar:
@@ -248,19 +267,23 @@ def batch_test(data_dir, weights, corr_record=False):
             gt_file = os.path.join(subdir_path, 'relative_transform.npy')
 
             src_back_indices_json = os.path.join(subdir_path, 'src_back_indices.json')
+            ref_back_indices_json = os.path.join(subdir_path, 'ref_back_indices.json')
             with open(src_back_indices_json , 'r') as file:
                 data = json.load(file)
                 src_back_indices = np.array(data['back_indices'])
-
+            with open(ref_back_indices_json , 'r') as file:
+                data = json.load(file)
+                ref_back_indices = np.array(data['back_indices'])
             data_dict_true = None
+            output_dict_true = None
 
             rmse_true = None
             corr_points = None
 
             if os.path.exists(src_true_file) and os.path.exists(ref_true_file) and os.path.exists(gt_file):
-                data_dict_true = load_data(src_true_file, ref_true_file, gt_file, src_back_indices)
+                data_dict_true = load_data(src_true_file, ref_true_file, gt_file, src_back_indices, ref_back_indices)
                 print(len(data_dict_true.get('src_points')) , len(data_dict_true.get('ref_points')))
-                rre, rte, estimate_rt,  corr = process_pair(model, data_dict_true, cfg)
+                rre, rte, estimate_rt,  corr, output_dict_true = process_pair(model, data_dict_true, cfg)
                 corr_points = corr
                 rmse = compute_RMSE(data_dict_true.get('src_points'), data_dict_true.get('transform'), estimate_rt)
                 print('rmse_true ' , rmse)
@@ -278,19 +301,25 @@ def batch_test(data_dir, weights, corr_record=False):
                 continue
 
             #correspondence showing
-            corr_out_succ = os.path.join(subdir_path, 'succ_tune')
-            corr_out_fail = os.path.join(subdir_path, 'fail_tune')
+            corr_out_succ = os.path.join('dataset/3D-Deforming-FRONT-v5_show/show/sp/high',subdir_path, 'succ_tune')
+            corr_out_fail = os.path.join('dataset/3D-Deforming-FRONT-v5_show/show/sp/high',subdir_path, 'fail_tune')
             
             if rmse_true != None:
                 if rmse_true < 0.2:
+                    mask = output_dict_true['corr_sp_mask']
+                    #mask = output_dict_true['gt_mask']
                     os.makedirs(corr_out_succ, exist_ok=True)
-                    pc_src = savePC(data_dict_true.get('src_points'), corr[:,0:3], os.path.join(corr_out_succ, 'src_sp.pcd'))
-                    pc_ref = savePC(data_dict_true.get('ref_points'), corr[:,3:6], os.path.join(corr_out_succ, 'ref_sp.pcd'), src=False)
-                    combinePC(pc_src, pc_ref, data_dict_true.get('transform'), os.path.join(corr_out_succ, 'combine.pcd'))
+                    super_src = output_dict_true['src_points_c']
+                    super_ref = output_dict_true['ref_points_c']
+                    pc_src = savePCwiMask(data_dict_true.get('src_points'), super_src, mask[len(super_ref):],os.path.join(corr_out_succ, 'src_sp_mask.pcd'))
+                    pc_ref = savePCwiMask(data_dict_true.get('ref_points'), super_ref, mask[:len(super_ref)],os.path.join(corr_out_succ, 'ref_sp_mask.pcd'))
+                    # pc_src = savePC(data_dict_true.get('src_points'), corr[:,0:3], os.path.join(corr_out_succ, 'src_sp.pcd'))
+                    # pc_ref = savePC(data_dict_true.get('ref_points'), corr[:,3:6], os.path.join(corr_out_succ, 'ref_sp.pcd'), src=False)
+                    # combinePC(pc_src, pc_ref, data_dict_true.get('transform'), os.path.join(corr_out_succ, 'combine.pcd'))
                     corr_out_src = os.path.join(corr_out_succ, 'src.png')
                     corr_out_ref = os.path.join(corr_out_succ, 'ref.png')
                     if len(np.load(src_true_file)) > 1000 or len(np.load(ref_true_file)) > 1000:
-                        show_corr(src_true_file, ref_true_file, corr_points, corr_out_succ)
+                        #show_corr(src_true_file, ref_true_file, corr_points, corr_out_succ)
                         destination_dir = os.path.dirname(corr_out_src)
                         os.makedirs(destination_dir, exist_ok=True)
                         destination_dir = os.path.dirname(corr_out_ref)
@@ -299,13 +328,13 @@ def batch_test(data_dir, weights, corr_record=False):
                         shutil.copyfile(ref_true_img, corr_out_ref)
                 if rmse_true> 0.2:
                     os.makedirs(corr_out_fail, exist_ok=True)
-                    pc_src = savePC(data_dict_true.get('src_points'), corr[:,0:3], os.path.join(corr_out_fail, 'src_sp.pcd'))
-                    pc_ref = savePC(data_dict_true.get('ref_points'), corr[:,3:6], os.path.join(corr_out_fail, 'ref_sp.pcd'), src=False)
-                    combinePC(pc_src, pc_ref, data_dict_true.get('transform'), os.path.join(corr_out_fail, 'combine.pcd'))
+                    # pc_src = savePC(data_dict_true.get('src_points'), corr[:,0:3], os.path.join(corr_out_fail, 'src_sp.pcd'))
+                    # pc_ref = savePC(data_dict_true.get('ref_points'), corr[:,3:6], os.path.join(corr_out_fail, 'ref_sp.pcd'), src=False)
+                    # combinePC(pc_src, pc_ref, data_dict_true.get('transform'), os.path.join(corr_out_fail, 'combine.pcd'))
                     corr_out_src = os.path.join(corr_out_fail, 'src.png')
                     corr_out_ref = os.path.join(corr_out_fail, 'ref.png')
                     if len(np.load(src_true_file)) > 1000 or len(np.load(ref_true_file)) > 1000:
-                        show_corr(src_true_file, ref_true_file, corr_points, corr_out_fail)
+                        #show_corr(src_true_file, ref_true_file, corr_points, corr_out_fail)
                         destination_dir = os.path.dirname(corr_out_src)
                         os.makedirs(destination_dir, exist_ok=True)
                         destination_dir = os.path.dirname(corr_out_ref)
@@ -326,7 +355,7 @@ def batch_test(data_dir, weights, corr_record=False):
 def main():
     parser = make_parser()
     args = parser.parse_args()
-    dataset = os.path.join('dataset/3D-Deforming-FRONT-v5/rawdata', args.data_dir)
+    dataset = os.path.join('dataset/3D-Deforming-FRONT-v5_show/rawdata', args.data_dir)
     batch_test(dataset,args.weights,corr_record=args.show_corr)
 
 if __name__ == "__main__":

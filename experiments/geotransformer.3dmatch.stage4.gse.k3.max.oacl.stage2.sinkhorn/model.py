@@ -39,7 +39,7 @@ class GeoTransformer(nn.Module):
             if not self.stage == 1:
                 self.mask = LaplaceMask(cfg)
             
-        self.loss = LaplaceLoss(cfg)
+        #self.loss = LaplaceLoss(cfg)
         self.transformer = GeometricTransformer(
             cfg.geotransformer.input_dim,
             cfg.geotransformer.output_dim,
@@ -228,7 +228,8 @@ class GeoTransformer(nn.Module):
             output_dict['corr_scores'] = corr_scores
             output_dict['estimated_transform'] = estimated_transform
 
-        loss = self.loss(output_dict, data_dict)
+        # loss, gt_mask = self.loss(output_dict, data_dict)
+        # output_dict['gt_mask'] = gt_mask
         return output_dict
 
 

@@ -122,8 +122,11 @@ class LaplaceLoss(nn.Module):
 
         if self.stage == 1:
             corr_sp_mask = torch.ones(corr_gt.shape[0] + corr_gt.shape[1], device=device)
+            loss = self.loss(output_dict, corr_gt, 1 - corr_sp_mask, 1 - corr_sp_mask)
         else:
-            corr_sp_mask = output_dict['corr_sp_mask'].to(device) #B,1,n+m
-        loss = self.loss(output_dict, corr_gt, 1 - corr_sp_mask, 1 - gt_mask)
+            corr_sp_mask = output_dict['corr_sp_mask'] #B,1,n+m
+            loss = self.loss(output_dict, corr_gt, 1 - corr_sp_mask, 1 - gt_mask)
+        #return loss,gt_mask
         return loss
+    
 

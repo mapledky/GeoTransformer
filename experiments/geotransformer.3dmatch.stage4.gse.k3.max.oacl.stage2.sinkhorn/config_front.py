@@ -16,7 +16,7 @@ _C.seed = 7351
 _C.working_dir = osp.dirname(osp.realpath(__file__))
 _C.root_dir = osp.dirname(osp.dirname(_C.working_dir))
 _C.exp_name = osp.basename(_C.working_dir)
-_C.output_dir = osp.join(_C.root_dir, 'output_stage2_48_circle', _C.exp_name)
+_C.output_dir = osp.join(_C.root_dir, 'output_stage2_96_circle_layler2', _C.exp_name)
 _C.snapshot_dir = osp.join(_C.output_dir, 'snapshots')
 _C.log_dir = osp.join(_C.output_dir, 'logs')
 _C.event_dir = osp.join(_C.output_dir, 'events')
@@ -36,7 +36,7 @@ _C.data.dataset_root = 'dataset/3D-Deforming-FRONT-v5/'
 
 #resume
 #_C.snapshot = osp.join(_C.output_dir, 'snapshots/snapshot.pth.tar')
-_C.snapshot = 'code/GeoTransformer-main/output_stage1_48_circle/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-15.pth.tar'
+_C.snapshot = 'code/GeoTransformer-main/output_stage1_96_circle/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-15.pth.tar'
 #_C.snapshot = None
 # train data
 _C.train = edict()
@@ -121,7 +121,7 @@ _C.maskformer.input_dim = 1024
 _C.maskformer.hidden_dim = 256
 _C.maskformer.output_dim = 256
 _C.maskformer.num_heads = 4
-_C.maskformer.blocks = ['self', 'cross']
+_C.maskformer.blocks = ['self', 'cross', 'self', 'cross']
 _C.maskformer.sigma_d = 0.2
 _C.maskformer.sigma_a = 15
 _C.maskformer.angle_k = 3
@@ -166,7 +166,7 @@ _C.laplace.stage = 2
 _C.laplace.pos_margin = 0.1
 _C.laplace.neg_margin = 1.4
 _C.laplace.log_scale = 24
-_C.coarse_matching.num_correspondences = 48
+_C.coarse_matching.num_correspondences = 96
 _C.optim.max_epoch =60
 
 

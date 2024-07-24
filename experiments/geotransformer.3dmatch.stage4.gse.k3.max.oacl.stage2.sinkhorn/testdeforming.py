@@ -3,7 +3,7 @@ import os
 import numpy as np
 import random
 
-os.environ["CUDA_VISIBLE_DEVICES"] = '0'
+os.environ["CUDA_VISIBLE_DEVICES"] = '3'
 import torch
 
 from geotransformer.utils.data import registration_collate_fn_stack_mode
@@ -22,7 +22,7 @@ import shutil
 """"
 python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir bp/low --weights code/GeoTransformer-main/output/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-40.pth.tar
 
-python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir sp/low --weights code/GeoTransformer-main/output_stage2_64_cross/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-27.pth.tar --tune 1
+python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir bp/low --weights code/GeoTransformer-main/output_stage2_48_circle/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/snapshots/epoch-39.pth.tar --tune 1
 
 python code/GeoTransformer-main/experiments/geotransformer.3dmatch.stage4.gse.k3.max.oacl.stage2.sinkhorn/testdeforming.py --data_dir bp/low --way ransac --tune 1
 
@@ -330,7 +330,7 @@ def batch_test(data_dir, weights, tune=0, rec_corr=0):
     total_subdirs = len(subdirs)
 
     if total_subdirs >= 500:
-        subdirs = subdirs[total_subdirs - 20:]
+        subdirs = subdirs[total_subdirs - 500:]
     total_subdirs = len(subdirs)
 
     with tqdm(total=total_subdirs, desc='Processing subdirectories') as pbar:
