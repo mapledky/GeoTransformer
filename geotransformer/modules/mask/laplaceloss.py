@@ -12,7 +12,7 @@ class NLLLaplace:
         super().__init__()
         self.ratio = ratio
 
-    def __call__(self, corr_gt, corr_es, log_var_mask, gt_mask):
+    def __call__(self, corr_gt, corr_es, log_var_mask):
         m, n = corr_gt.shape
         indices = np.sum(np.array(corr_es.cpu().detach()) > 0)
         indices_back = np.sum(np.array(corr_gt.cpu().detach()) > 0)
@@ -24,11 +24,11 @@ class NLLLaplace:
         laplace_mask = torch.ger(ref_mask, src_mask)
         # loss1 = math.sqrt(2) * indice_ratio * torch.exp(-0.5 * src_mask).unsqueeze(-1) * \
         #     torch.abs(corr_gt - corr_es) * torch.exp(-0.5 * ref_mask)
-        loss1 = math.sqrt(2) * indice_ratio * torch.exp(-0.5 * laplace_mask) * \
+        loss1 = 5 * math.sqrt(2) * indice_ratio * torch.exp(-0.5 * laplace_mask) * \
              torch.abs(corr_gt - corr_es)
         loss1 = loss1.mean()
         # each dimension is multiplied
-        loss2 = 1. * torch.abs(log_var_mask - gt_mask).mean()
+        loss2 = 0.5 * laplace_mask.mean()
         loss = loss1 + loss2
         return loss, loss1, loss2
 
@@ -127,9 +127,8 @@ class LaplaceLoss(nn.Module):
 
         if self.stage == 1:
             corr_sp_mask = torch.ones(corr_gt.shape[0] + corr_gt.shape[1], device=device)
-            loss = self.loss(corr_gt, corr_es, (1 - corr_sp_mask), 1-corr_sp_mask)
         else:
-            corr_sp_mask = output_dict['corr_sp_mask'].to(device) #B,1,n+m
-            loss = self.loss(corr_gt, corr_es, (1 - corr_sp_mask), 1-gt_mask)
+            corr_sp_mask = output_dict['corr_sp_mask']#B,1,n+m
+        loss = self.loss(corr_gt, corr_es, (1 - corr_sp_mask))
         return loss
 

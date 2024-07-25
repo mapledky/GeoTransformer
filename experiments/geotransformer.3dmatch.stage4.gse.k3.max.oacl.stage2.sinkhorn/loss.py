@@ -89,7 +89,7 @@ class OverallLoss(nn.Module):
         fine_loss = self.fine_loss(output_dict, data_dict)
         if self.use_laplace:
             laplace_loss, corr_loss, mask_loss = self.laplace_loss(output_dict, data_dict)
-            loss = self.weight_coarse_loss * coarse_loss + self.weight_fine_loss * fine_loss + self.weight_laplace_loss * laplace_loss
+            loss = self.weight_coarse_loss * coarse_loss + self.weight_fine_loss * fine_loss + self.weight_laplace_loss * laplace_loss * 0.2
             return {
                 'loss': loss,
                 # 'c_loss': coarse_loss,
